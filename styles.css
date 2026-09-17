@@ -1,5 +1,6 @@
-.topic-highlight {
-    background-color: yellow;
-    border-radius: 2px;
-    padding: 0 1px;
-  }
+.local-filter-highlight {
+  color: rgba(0, 0, 0, 0.2);
+  filter: blur(5px);
+  opacity: 0.2;
+  background-color: black;
+}
