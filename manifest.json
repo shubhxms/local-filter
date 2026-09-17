@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Text Extractor",
+  "name": "Local Filter",
   "version": "1.0",
-  "description": "Extracts text from web pages",
-  "permissions": ["storage", "activeTab"],
-  "host_permissions": ["<all_urls>"],
+  "description": "A local semantic filter using zero-shot classification!",
+  "permissions": ["storage", "activeTab", "offscreen"],
+  "host_permissions": ["https://*/", "http://*/"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -15,8 +16,17 @@
       "css": ["styles.css"]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
+  },
   "action": {
     "default_popup": "/popup/popup.html"
   },
-  "options_page": "options/options.html"
+  "options_page": "options/options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["libs/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
