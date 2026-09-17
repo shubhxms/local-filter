@@ -1,0 +1,6 @@
+- TODO
+  - [x] Split text into sentences
+  - [x] Run thru HF model
+  - [x] Use markjs on whatever matches atleast one!
+    - [x] if score for any label > threshold -> pass to markjs array
+  - [x] figure out a way to import HF
