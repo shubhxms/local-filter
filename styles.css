@@ -46,15 +46,19 @@
   filter: url(#local-filter-pixelate);
 }
 
-/* Redacted: the text itself becomes the word — font-size 0 collapses
-   the original, ::before paints the token back at reading size. */
-.local-filter-redacted {
-  font-size: 0;
+/* Redacted: the text itself becomes the word. font-size 0 collapses the
+   original — including descendants with authored sizes (!important:
+   site CSS sets explicit sizes on p/a/strong constantly) — and ::before
+   paints the token back at reading size (pseudo-elements are not
+   matched by the * rule, so its own size stands). */
+.local-filter-redacted,
+.local-filter-redacted * {
+  font-size: 0 !important;
 }
 
 .local-filter-redacted::before {
   content: "[REDACTED]";
-  font-size: 13px;
+  font-size: 13px !important;
   letter-spacing: 0.02em;
   color: #111;
 }

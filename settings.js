@@ -254,14 +254,15 @@ async function loadAutoFilter() {
   if (document.querySelectorAll("#autoFilter input").length === 0) return;
 
   let value;
-  const scoped = document.body.classList.contains("popup") &&
-    window.LF_SITE_ORIGIN;
+  const scoped =
+    document.body.classList.contains("popup") && window.LF_SITE_ORIGIN;
   if (scoped) {
     const key = `lf-auto:${window.LF_SITE_ORIGIN}`;
     const site = (await chrome.storage.local.get(key))[key];
-    value = typeof site === "boolean"
-      ? site
-      : (await chrome.storage.sync.get("autoFilter")).autoFilter ?? false;
+    value =
+      typeof site === "boolean"
+        ? site
+        : ((await chrome.storage.sync.get("autoFilter")).autoFilter ?? false);
   } else {
     value = (await chrome.storage.sync.get("autoFilter")).autoFilter ?? false;
   }

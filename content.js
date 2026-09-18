@@ -227,7 +227,10 @@ class Run {
       // Cached verdict for this exact text? Skip the API entirely.
       const fp = fingerprint(el.innerText.trim());
       if (Object.hasOwn(this.cache, fp)) {
-        this.finish(el, typeof this.cache[fp] === "string" ? this.cache[fp] : null);
+        this.finish(
+          el,
+          typeof this.cache[fp] === "string" ? this.cache[fp] : null,
+        );
         return;
       }
 

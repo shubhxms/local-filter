@@ -44,12 +44,14 @@
     <section>
       <span class="field-label">Strictness</span>
       <div class="slider-row">
-        <input type="range" id="strictness" min="0" max="1" step="0.05" value="0.5">
+        <div class="slider-stack">
+          <input type="range" id="strictness" min="0" max="1" step="0.05" value="0.5">
+          <div class="slider-marks">
+            <span>permissive</span>
+            <span>restrictive</span>
+          </div>
+        </div>
         <span class="slider-value" id="strictnessLabel">Balanced</span>
-      </div>
-      <div class="slider-marks">
-        <span>permissive</span>
-        <span>restrictive</span>
       </div>
     </section>
 

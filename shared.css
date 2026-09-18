@@ -139,6 +139,15 @@ h1 {
   gap: 12px;
 }
 
+/* The slider and its direction hints share one column, so the marks
+   span exactly the track's width; the current value sits outside. */
+.slider-stack {
+  flex: 1;
+}
+
+.slider-stack input {
+  width: 100%;
+}
 .slider-row input {
   flex: 1;
 }
@@ -181,7 +190,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 .slider-marks {
   display: flex;
   justify-content: space-between;
-  font-size: 10.5px;
+  width: 100%;
   font-style: italic;
   color: var(--muted);
   margin-top: 1px;
