@@ -379,6 +379,37 @@ body.settings section:first-of-type {
   margin: 0;
 }
 
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.stat-name {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-bar-wrap {
+  flex: 1;
+}
+
+.stat-bar {
+  height: 3px;
+  background: var(--ink);
+}
+
+.stat-count {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 2em;
+  text-align: right;
+}
+
 .hint {
   font-size: 12.5px;
   font-style: italic;

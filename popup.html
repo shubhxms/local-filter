@@ -25,6 +25,7 @@
         <label><input type="radio" name="censor" value="blur"><span>Blur</span></label>
         <label><input type="radio" name="censor" value="black"><span>Black</span></label>
         <label><input type="radio" name="censor" value="pixelate"><span>Pixelate</span></label>
+        <label><input type="radio" name="censor" value="redacted"><span>Redacted</span></label>
         <label><input type="radio" name="censor" value="hide"><span>Hide</span></label>
       </div>
       <div style="margin-top: 6px;">
@@ -54,6 +55,10 @@
 
     <button id="filterBtn" class="primary">Filter this page</button>
     <div class="status" id="pageStats"></div>
+    <section id="matchStats" hidden>
+      <span class="field-label">On this page</span>
+      <div id="matchRows"></div>
+    </section>
 
     <footer>
       <a href="#" id="openOptions">Open in new tab ↗</a>

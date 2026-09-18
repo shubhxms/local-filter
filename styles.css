@@ -1,12 +1,14 @@
-/* Local Filter — censor styles for matched blocks, and the toast. */
+/* Local Censor — censor styles for matched blocks, and the toast. */
 
-/* Censored text must not be selectable — no leaking via copy/paste. */
+/* Censored content is inert: no link clicks, no hover. Selection is
+   still possible (outer drags, Ctrl/Cmd+A) so a copy attempt can be
+   answered with [REDACTED] by the copy interceptor in content.js. */
 .local-filter-blur,
 .local-filter-black,
 .local-filter-pixelate,
+.local-filter-redacted,
 .local-filter-hide {
-  user-select: none;
-  -webkit-user-select: none;
+  pointer-events: none;
 }
 
 .local-filter-blur {
@@ -42,6 +44,19 @@
 
 .local-filter-pixelate {
   filter: url(#local-filter-pixelate);
+}
+
+/* Redacted: the text itself becomes the word — font-size 0 collapses
+   the original, ::before paints the token back at reading size. */
+.local-filter-redacted {
+  font-size: 0;
+}
+
+.local-filter-redacted::before {
+  content: "[REDACTED]";
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #111;
 }
 
 .local-filter-hide {

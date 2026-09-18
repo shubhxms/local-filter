@@ -43,13 +43,49 @@
     }
   });
 
-  // Live count for this page — ask the content script how the run went.
+  // Live count and topic breakdown for this page.
   try {
     const stats = await chrome.tabs.sendMessage(tab.id, { type: "GET_STATS" });
     $("pageStats").textContent = stats?.censored
       ? `${stats.censored} ${stats.censored === 1 ? "block" : "blocks"} censored on this page`
       : "";
+    renderMatchStats(stats?.topics);
   } catch {
     $("pageStats").textContent = "";
+    $("matchStats").hidden = true;
   }
 })();
+
+// What matched most: top topics by censored-block count, hairline bars.
+function renderMatchStats(topics) {
+  const entries = Object.entries(topics ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  $("matchStats").hidden = entries.length === 0;
+  if (entries.length === 0) return;
+
+  const max = entries[0][1];
+  const rows = entries.map(([topic, count]) => {
+    const row = document.createElement("div");
+    row.className = "stat-row";
+
+    const name = document.createElement("span");
+    name.className = "stat-name";
+    name.textContent = topic;
+
+    const wrap = document.createElement("div");
+    wrap.className = "stat-bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = "stat-bar";
+    bar.style.width = `${Math.round((100 * count) / max)}%`;
+    wrap.append(bar);
+
+    const tally = document.createElement("span");
+    tally.className = "stat-count";
+    tally.textContent = count;
+
+    row.append(name, wrap, tally);
+    return row;
+  });
+  $("matchRows").replaceChildren(...rows);
+}

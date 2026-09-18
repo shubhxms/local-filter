@@ -14,6 +14,7 @@ const MODE_CLASSES = {
   blur: "local-filter-blur",
   black: "local-filter-black",
   pixelate: "local-filter-pixelate",
+  redacted: "local-filter-redacted",
   hide: "local-filter-hide",
 };
 const MAX_SENTENCES_PER_ELEMENT = 20; // sanity cap for pathological blocks
@@ -400,6 +401,35 @@ function collectBlocks() {
 
 // The pixelate mode needs an SVG filter def in the page; inject it once, lazily.
 // Small serif toast, bottom-right — acknowledges every filter run.
+// Copying a selection that includes censored content answers with
+// [REDACTED] in its place; clean text in the same selection survives.
+const CENSORED_SELECTOR =
+  ".local-filter-blur, .local-filter-black, .local-filter-pixelate, .local-filter-redacted";
+
+document.addEventListener("copy", (event) => {
+  const selection = document.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+  // Entirely inside one censored block: the whole copy is the token.
+  const root = selection.getRangeAt(0).commonAncestorContainer;
+  const rootEl = root.nodeType === 1 ? root : root.parentElement;
+  if (rootEl?.closest?.(CENSORED_SELECTOR)) {
+    event.clipboardData.setData("text/plain", "[REDACTED]");
+    event.preventDefault();
+    return;
+  }
+
+  // Mixed selection: swap censored fragments for the token, keep the rest.
+  const holder = document.createElement("div");
+  holder.appendChild(selection.getRangeAt(0).cloneContents());
+  const censoredBits = holder.querySelectorAll(CENSORED_SELECTOR);
+  if (censoredBits.length === 0) return; // clean copy — default behavior
+
+  for (const el of censoredBits) el.replaceWith("[REDACTED]");
+  event.clipboardData.setData("text/plain", holder.textContent);
+  event.preventDefault();
+});
+
 let toastEl = null;
 let toastTimer = null;
 // macOS-passkey-style acknowledgment: a square springs in and a check
