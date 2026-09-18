@@ -62,7 +62,9 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
       label.textContent = item;
       label.title = "Click to edit";
       label.tabIndex = 0;
-      label.addEventListener("click", () => editEntry(label, item, storageKey, load));
+      label.addEventListener("click", () =>
+        editEntry(label, item, storageKey, load),
+      );
       label.addEventListener("keydown", (event) => {
         if (event.key === "Enter") editEntry(label, item, storageKey, load);
       });

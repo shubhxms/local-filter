@@ -1,4 +1,4 @@
-// Local Filter - Content Script
+// Local Censor — Content Script
 // Element-level extraction + scroll-driven classification: blocks enter the
 // queue via IntersectionObserver a few scroll units before they appear.
 // Sentences are the measurement unit (Jev scores them); block elements are
@@ -93,7 +93,7 @@ async function startRun(seq) {
 
   if (topics.length === 0) {
     console.log(
-      "[LocalFilter] No topics configured. Add topics in the extension options.",
+      "[LocalCensor] No topics configured. Add topics in the extension options.",
     );
     return;
   }
@@ -167,7 +167,7 @@ class Run {
     for (const el of this.blocks.keys()) this.observer.observe(el);
     this.errors = 0;
     console.log(
-      `[LocalFilter] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
+      `[LocalCensor] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
     );
   }
 
@@ -199,7 +199,7 @@ class Run {
         this.inFlight--;
         if (!this.stopped && this.queue.length === 0 && this.inFlight === 0) {
           console.log(
-            `[LocalFilter] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
+            `[LocalCensor] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
           );
           clearTimeout(this.saveTimer);
           this.save();
@@ -239,7 +239,7 @@ class Run {
 
       if (this.classified === 0) {
         console.log(
-          "[LocalFilter] First block sample:",
+          "[LocalCensor] First block sample:",
           JSON.stringify(response.classifications).slice(0, 300),
         );
       }
@@ -254,7 +254,7 @@ class Run {
         ? " (service worker died mid-request — see chrome://extensions → Local Filter → service worker console)"
         : "";
       console.error(
-        "[LocalFilter] Classification failed:",
+        "[LocalCensor] Classification failed:",
         error.message + hint,
       );
     } finally {
@@ -272,7 +272,7 @@ class Run {
     const best = Math.max(...classifications.flatMap((c) => c.scores));
 
     console.log(
-      `[LocalFilter] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
+      `[LocalCensor] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
     );
 
     const gate = matched > 0 && matched / sentences.length >= paragraphFraction;
@@ -288,7 +288,7 @@ class Run {
       const redeemMean = mean(classifications.map((c) => c.redeem));
       if (redeemMean >= this.mercy * censorMean) {
         console.log(
-          `[LocalFilter] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
+          `[LocalCensor] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
         );
         return false;
       }
@@ -309,13 +309,13 @@ class Run {
         `${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`,
       );
       console.log(
-        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
+        `[LocalCensor] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
       );
     }
 
     if (this.classified % 25 === 0) {
       console.log(
-        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} censored`,
+        `[LocalCensor] Progress: ${this.classified} classified, ${this.blurred} censored`,
       );
     }
   }
@@ -331,7 +331,7 @@ class Run {
       await chrome.storage.local.set({ [this.cacheKey]: this.cache });
       await pruneResultCache(this.cacheKey);
     } catch (error) {
-      console.error("[LocalFilter] Failed to save page results:", error);
+      console.error("[LocalCensor] Failed to save page results:", error);
     }
   }
 }
@@ -453,4 +453,4 @@ function segment(text) {
   return sentences.slice(0, MAX_SENTENCES_PER_ELEMENT);
 }
 
-console.log("Local Filter content script loaded (element pipeline)");
+console.log("Local Censor content script loaded (element pipeline)");

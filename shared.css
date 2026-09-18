@@ -6,7 +6,7 @@
   --ink: #111;
   --paper: #fff;
   --line: #ddd;
-  --muted: #777;
+  --muted: #595959; /* ~7:1 on white — small letterspaced text stays legible */
 }
 
 * {
@@ -79,7 +79,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
@@ -379,9 +379,8 @@ body.settings section:first-of-type {
   margin: 0;
 }
 
-
 .hint {
-  font-size: 12px;
+  font-size: 12.5px;
   font-style: italic;
   color: var(--muted);
   margin: 8px 0 0;

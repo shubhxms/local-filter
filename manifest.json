@@ -6,9 +6,9 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "name": "Local Filter",
+  "name": "Local Censor",
   "version": "1.0",
-  "description": "A local semantic filter using zero-shot classification!",
+  "description": "Censor what you'd rather not read — decided locally, classified by Jev.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://api.typesafe.ai/*"],
   "background": {
