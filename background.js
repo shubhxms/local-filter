@@ -10,11 +10,19 @@ chrome.runtime.onMessage.addListener((message, sendResponse) => {
   if (message.action === "classifySentences") {
     classifyBatch(message)
       .then((classifications) => {
-        sendResponse({ success: true, requestId: message.requestId, classifications });
+        sendResponse({
+          success: true,
+          requestId: message.requestId,
+          classifications,
+        });
       })
       .catch((error) => {
         console.error("[Background] Classification failed:", error);
-        sendResponse({ success: false, requestId: message.requestId, error: error.message });
+        sendResponse({
+          success: false,
+          requestId: message.requestId,
+          error: error.message,
+        });
       });
 
     return true; // async sendResponse
@@ -33,7 +41,9 @@ async function classifyBatch({ sentences, topics }) {
 
   const { jevApiKey: apiKey } = await chrome.storage.local.get("jevApiKey");
   if (!apiKey) {
-    throw new Error("No Jev API key configured. Add one in the extension options.");
+    throw new Error(
+      "No Jev API key configured. Add one in the extension options.",
+    );
   }
 
   // Self-contained structured instructions bind each question to its sentence
@@ -43,7 +53,10 @@ async function classifyBatch({ sentences, topics }) {
     topics.forEach((topic, j) => {
       questions[`s${i}_t${j}`] = {
         type: "noul",
-        instructions: { question: `Is this sentence about ${topic}?`, sentence },
+        instructions: {
+          question: `Is this sentence about ${topic}?`,
+          sentence,
+        },
         criteria: null,
       };
     });
@@ -76,7 +89,7 @@ async function classifyBatch({ sentences, topics }) {
       const answer = data.answers?.[key];
       if (typeof answer?.noul !== "number" || !Number.isFinite(answer.noul)) {
         throw new Error(
-          `Jev response missing answer ${key}: ${JSON.stringify(answer).slice(0, 200)}`
+          `Jev response missing answer ${key}: ${JSON.stringify(answer).slice(0, 200)}`,
         );
       }
       return answer.noul;
