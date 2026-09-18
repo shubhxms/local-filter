@@ -107,6 +107,10 @@ async function classifyBatch({ sentences, topics, qualities = [] }) {
         type: "noul",
         instructions: {
           question: `Does this sentence read as ${quality}?`,
+          sentence,
+        },
+        criteria: null,
+      };
     });
   });
 
