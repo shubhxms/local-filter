@@ -16,7 +16,9 @@ async function fetchWithTimeout(url, options) {
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error(`Jev API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+      throw new Error(
+        `Jev API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`,
+      );
     }
     throw new Error(`Jev API request failed: ${error.message}`);
   } finally {
@@ -24,7 +26,10 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sendResponse) => {
+// NOTE: the listener signature is positional (message, sender, sendResponse) —
+// do NOT drop the middle parameter to satisfy the unused-variable lint;
+// that shifts sendResponse into sender's slot and every reply throws.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "classifySentences") {
     classifyBatch(message)
       .then((classifications) => {
