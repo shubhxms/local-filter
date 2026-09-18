@@ -10,6 +10,38 @@ const $ = (id) => document.getElementById(id);
 
 // ---- Word lists (topics, redeeming qualities) ----------------------------
 
+// Click an entry to edit it in place: Enter commits, Escape reverts,
+// blur commits (empty or duplicate values are ignored).
+function editEntry(label, item, storageKey, reload) {
+  const editor = document.createElement("input");
+  editor.type = "text";
+  editor.value = item;
+  label.replaceWith(editor);
+  editor.focus();
+  editor.select();
+
+  const commit = async () => {
+    const value = editor.value.trim();
+    const { [storageKey]: current = [] } =
+      await chrome.storage.sync.get(storageKey);
+    const next =
+      !value || value === item || current.includes(value)
+        ? current
+        : current.map((t) => (t === item ? value : t));
+    await chrome.storage.sync.set({ [storageKey]: next });
+    reload();
+  };
+
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") editor.blur();
+    if (event.key === "Escape") {
+      editor.value = item;
+      editor.blur();
+    }
+  });
+  editor.addEventListener("blur", commit);
+}
+
 function wireWordList({ listId, inputId, addId, storageKey }) {
   const list = $(listId);
   const input = $(inputId);
@@ -17,9 +49,8 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
   if (!list || !input) return;
 
   const load = async () => {
-    const { [storageKey]: items = [] } = await chrome.storage.sync.get(
-      storageKey,
-    );
+    const { [storageKey]: items = [] } =
+      await chrome.storage.sync.get(storageKey);
     list.innerHTML = "";
 
     for (const item of items) {
@@ -27,7 +58,14 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
       row.className = "topic";
 
       const label = document.createElement("span");
+      label.className = "value";
       label.textContent = item;
+      label.title = "Click to edit";
+      label.tabIndex = 0;
+      label.addEventListener("click", () => editEntry(label, item, storageKey, load));
+      label.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") editEntry(label, item, storageKey, load);
+      });
 
       const remove = document.createElement("button");
       remove.className = "ghost";
@@ -49,9 +87,8 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
   const add = async () => {
     const value = input.value.trim();
     if (!value) return;
-    const { [storageKey]: current = [] } = await chrome.storage.sync.get(
-      storageKey,
-    );
+    const { [storageKey]: current = [] } =
+      await chrome.storage.sync.get(storageKey);
     await chrome.storage.sync.set({ [storageKey]: [...current, value] });
     input.value = "";
     load();
@@ -118,8 +155,8 @@ async function refreshKeyStatus() {
 }
 
 async function loadSettings() {
-  const scoped = document.body.classList.contains("popup") &&
-    window.LF_SITE_ORIGIN;
+  const scoped =
+    document.body.classList.contains("popup") && window.LF_SITE_ORIGIN;
   const { censorMode, strictness, mercy } = await getSettings();
   const mode = scoped
     ? await getEffectiveCensorMode(window.LF_SITE_ORIGIN)
@@ -148,6 +185,11 @@ async function loadSettings() {
 // ---- Init ----------------------------------------------------------------
 
 function initSettings() {
+  document.querySelector("[data-about]")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL("about.html") });
+  });
+
   wireWordList({
     listId: "topicsList",
     inputId: "newTopic",
@@ -160,12 +202,7 @@ function initSettings() {
     addId: "addQuality",
     storageKey: "qualities",
   });
-  wireSlider(
-    "strictness",
-    "strictnessLabel",
-    strictnessLabel,
-    "strictness",
-  );
+  wireSlider("strictness", "strictnessLabel", strictnessLabel, "strictness");
   wireSlider("mercy", "mercyLabel", mercyLabel, "mercy");
   wireCensorMode();
   wireApiKey();

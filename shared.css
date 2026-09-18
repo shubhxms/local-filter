@@ -177,6 +177,48 @@ input[type="range"]:active::-webkit-slider-thumb {
   transform: scale(1.2);
 }
 
+/* Direction hints under sliders. */
+.slider-marks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* Keyboard focus — visible on every control. */
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Editable list entries hint at it. */
+.topic .value {
+  cursor: text;
+  border-bottom: 1px dotted transparent;
+}
+
+.topic .value:hover {
+  border-bottom-color: var(--muted);
+}
+
+/* About link, right-aligned in the masthead. */
+.about-link {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.about-link:hover {
+  color: var(--ink);
+}
+
 /* Buttons and inputs */
 
 button {
@@ -319,6 +361,13 @@ body.settings section:first-of-type {
 .add-row input {
   flex: 1;
 }
+
+.prose {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0;
+}
+
 
 .hint {
   font-size: 12px;

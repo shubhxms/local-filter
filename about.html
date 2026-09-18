@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="/shared.css">
+</head>
+<body class="settings">
+  <main>
+    <div class="masthead">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="2" y="2" width="60" height="60" rx="14" fill="#fff" stroke="#111" stroke-width="3"/>
+        <rect x="14" y="21" width="36" height="6" rx="3" fill="#111"/>
+        <rect x="14" y="29" width="27" height="6" rx="3" fill="#111"/>
+        <rect x="14" y="37" width="32" height="6" rx="3" fill="#111"/>
+      </svg>
+      <h1>Local Filter</h1>
+    </div>
+    <div class="rule"></div>
+    <p class="subtitle">Censor what you'd rather not read.</p>
+
+    <section>
+      <span class="field-label">What it does</span>
+      <p class="prose">
+        Local Filter reads the page you're on, decides block by block whether
+        it's about the topics you'd rather avoid, and censors what matches.
+        Blocks carrying your redeeming qualities are spared, at the mercy you
+        choose. The only thing that leaves your machine is the text being
+        judged.
+      </p>
+    </section>
+
+    <section>
+      <span class="field-label">How it decides</span>
+      <p class="prose">
+        Sentences are the measurement; blocks are the action. Each block's
+        sentences are scored against your topics in a single pass by Jev —
+        TypeSafe AI's System One model, which answers typed questions with
+        probabilities instead of prose. A block is censored when enough of
+        its sentences match; it is redeemed when its redeeming evidence
+        keeps up with its censoring evidence. Verdicts are cached per page,
+        so re-filtering costs nothing.
+      </p>
+    </section>
+
+    <section>
+      <span class="field-label">Keyboard</span>
+      <p class="prose">
+        <kbd>⌘⌃B</kbd> filters the current page. Every control in the popup
+        and this page is reachable by <kbd>Tab</kbd>; list entries can be
+        edited by clicking or focusing them and pressing <kbd>Enter</kbd>.
+      </p>
+    </section>
+
+    <section>
+      <span class="field-label">Colophon</span>
+      <p class="prose">
+        Version 1.0. Set in Iowan Old Style, in the manner of a well-set
+        document. The mark is three redaction bars. Classification by Jev;
+        everything else runs in your browser.
+      </p>
+    </section>
+  </main>
+</body>
+</html>

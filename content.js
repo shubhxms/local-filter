@@ -76,13 +76,17 @@ function thresholdsFor(strictness) {
 }
 
 async function startRun(seq) {
-  const { topics = [], strictness = 0.5, qualities = [], mercy = 1 } =
-    await chrome.storage.sync.get([
-      "topics",
-      "strictness",
-      "qualities",
-      "mercy",
-    ]);
+  const {
+    topics = [],
+    strictness = 0.5,
+    qualities = [],
+    mercy = 1,
+  } = await chrome.storage.sync.get([
+    "topics",
+    "strictness",
+    "qualities",
+    "mercy",
+  ]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;
@@ -118,7 +122,14 @@ async function startRun(seq) {
 }
 
 class Run {
-  constructor(topics, thresholds, cacheKey, cache = {}, qualities = [], mercy = 1) {
+  constructor(
+    topics,
+    thresholds,
+    cacheKey,
+    cache = {},
+    qualities = [],
+    mercy = 1,
+  ) {
     this.topics = topics;
     this.thresholds = thresholds;
     this.qualities = qualities; // redeeming qualities; empty = feature off
@@ -271,7 +282,9 @@ class Run {
     // redeem evidence keeps up with mean censor evidence, weighted by mercy.
     if (this.qualities.length > 0 && this.mercy > 0) {
       const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
-      const censorMean = mean(classifications.map((c) => Math.max(...c.scores)));
+      const censorMean = mean(
+        classifications.map((c) => Math.max(...c.scores)),
+      );
       const redeemMean = mean(classifications.map((c) => c.redeem));
       if (redeemMean >= this.mercy * censorMean) {
         console.log(
