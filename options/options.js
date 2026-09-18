@@ -62,11 +62,15 @@ const strictnessSlider = document.getElementById("strictness");
 const strictnessLabelEl = document.getElementById("strictnessLabel");
 
 strictnessSlider.addEventListener("input", () => {
-  strictnessLabelEl.textContent = strictnessLabel(parseFloat(strictnessSlider.value));
+  strictnessLabelEl.textContent = strictnessLabel(
+    parseFloat(strictnessSlider.value),
+  );
 });
 
 strictnessSlider.addEventListener("change", async () => {
-  await chrome.storage.sync.set({ strictness: parseFloat(strictnessSlider.value) });
+  await chrome.storage.sync.set({
+    strictness: parseFloat(strictnessSlider.value),
+  });
 });
 
 async function loadSettings() {
@@ -75,8 +79,9 @@ async function loadSettings() {
   strictnessLabelEl.textContent = strictnessLabel(strictness);
 
   const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
-  document.getElementById("keyStatus").textContent =
-    jevApiKey ? "API key saved ✓" : "No API key saved";
+  document.getElementById("keyStatus").textContent = jevApiKey
+    ? "API key saved ✓"
+    : "No API key saved";
 }
 document.addEventListener("DOMContentLoaded", loadSettings);
 document.addEventListener("DOMContentLoaded", loadTopics);
