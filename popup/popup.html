@@ -1,13 +1,40 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    body { width: 300px; padding: 10px; }
-    button { margin: 5px; }
-  </style>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="/shared.css">
 </head>
-<body>
-  <button id="filterBtn">Filter this page</button>
+<body class="popup">
+  <main>
+    <h1>Local Filter</h1>
+    <p class="subtitle">Censor what you'd rather not read.</p>
+
+    <section>
+      <span class="field-label">Censor</span>
+      <div class="segmented" id="censorMode">
+        <label><input type="radio" name="censor" value="blur"><span>Blur</span></label>
+        <label><input type="radio" name="censor" value="black"><span>Black</span></label>
+        <label><input type="radio" name="censor" value="pixelate"><span>Pixelate</span></label>
+        <label><input type="radio" name="censor" value="hide"><span>Hide</span></label>
+      </div>
+    </section>
+
+    <section>
+      <span class="field-label">Strictness</span>
+      <div class="slider-row">
+        <input type="range" id="strictness" min="0" max="1" step="0.05" value="0.5">
+        <span class="slider-value" id="strictnessLabel">Balanced</span>
+      </div>
+    </section>
+
+    <button id="filterBtn" class="primary">Filter this page</button>
+
+    <footer>
+      <a href="#" id="openOptions">All settings</a>
+      <kbd id="shortcutHint"></kbd>
+    </footer>
+  </main>
+  <script src="/shared-ui.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

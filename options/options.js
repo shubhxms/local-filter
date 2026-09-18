@@ -1,87 +1,103 @@
+const $ = (id) => document.getElementById(id);
+
+// ---- Topics -------------------------------------------------------------
+
 async function loadTopics() {
-  const { topics = [] } = await chrome.storage.sync.get("topics");
-  const topicsList = document.getElementById("topicsList");
-  topicsList.innerHTML = "";
+  const { topics } = await getSettings();
+  const list = $("topicsList");
+  list.innerHTML = "";
 
-  topics.forEach((topic) => {
-    const div = document.createElement("div");
-    div.className = "topic";
-    div.textContent = topic;
+  for (const topic of topics) {
+    const row = document.createElement("div");
+    row.className = "topic";
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "Delete";
-    deleteBtn.onclick = () => deleteTopic(topic);
+    const label = document.createElement("span");
+    label.textContent = topic;
 
-    div.appendChild(deleteBtn);
-    topicsList.appendChild(div);
-  });
+    const remove = document.createElement("button");
+    remove.className = "ghost";
+    remove.textContent = "Remove";
+    remove.onclick = async () => {
+      const { topics: current } = await getSettings();
+      await chrome.storage.sync.set({
+        topics: current.filter((t) => t !== topic),
+      });
+      loadTopics();
+    };
+
+    row.append(label, remove);
+    list.append(row);
+  }
 }
 
 async function addTopic() {
-  const input = document.getElementById("newTopic");
+  const input = $("newTopic");
   const topic = input.value.trim();
+  if (!topic) return;
 
-  if (topic) {
-    const { topics = [] } = await chrome.storage.sync.get("topics");
-    await chrome.storage.sync.set({
-      topics: [...topics, topic],
-    });
-    input.value = "";
-    loadTopics();
-  }
-}
-
-async function deleteTopic(topicToDelete) {
-  const { topics = [] } = await chrome.storage.sync.get("topics");
-  await chrome.storage.sync.set({
-    topics: topics.filter((topic) => topic !== topicToDelete),
-  });
+  const { topics } = await getSettings();
+  await chrome.storage.sync.set({ topics: [...topics, topic] });
+  input.value = "";
   loadTopics();
 }
 
-document.getElementById("addTopic").addEventListener("click", addTopic);
+// ---- Settings -----------------------------------------------------------
 
-document.getElementById("saveKey").addEventListener("click", async () => {
-  const input = document.getElementById("apiKey");
-  const key = input.value.trim();
-  if (key) {
+function wireCensorMode() {
+  document.querySelectorAll("#censorMode input").forEach((input) => {
+    input.addEventListener("change", () =>
+      chrome.storage.sync.set({ censorMode: input.value }),
+    );
+  });
+}
+
+function wireStrictness() {
+  const slider = $("strictness");
+  slider.addEventListener("input", () => {
+    $("strictnessLabel").textContent = strictnessLabel(parseFloat(slider.value));
+  });
+  slider.addEventListener("change", () => {
+    chrome.storage.sync.set({ strictness: parseFloat(slider.value) });
+  });
+}
+
+function wireApiKey() {
+  $("saveKey").addEventListener("click", async () => {
+    const input = $("apiKey");
+    const key = input.value.trim();
+    if (!key) return;
     await chrome.storage.local.set({ jevApiKey: key });
     input.value = "";
-    document.getElementById("keyStatus").textContent = "API key saved ✓";
-  }
-});
-
-// Keep this label mapping in sync with content.js (thresholdsFor).
-function strictnessLabel(value) {
-  if (value < 0.34) return "Permissive — blur only near-certain blocks";
-  if (value < 0.67) return "Balanced";
-  return "Restrictive — blur aggressively";
+    refreshKeyStatus();
+  });
 }
 
-const strictnessSlider = document.getElementById("strictness");
-const strictnessLabelEl = document.getElementById("strictnessLabel");
-
-strictnessSlider.addEventListener("input", () => {
-  strictnessLabelEl.textContent = strictnessLabel(
-    parseFloat(strictnessSlider.value),
-  );
-});
-
-strictnessSlider.addEventListener("change", async () => {
-  await chrome.storage.sync.set({
-    strictness: parseFloat(strictnessSlider.value),
-  });
-});
+async function refreshKeyStatus() {
+  const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
+  const status = $("keyStatus");
+  status.textContent = jevApiKey ? "Key saved" : "No key saved yet";
+  status.classList.toggle("ok", Boolean(jevApiKey));
+}
 
 async function loadSettings() {
-  const { strictness = 0.5 } = await chrome.storage.sync.get("strictness");
-  strictnessSlider.value = strictness;
-  strictnessLabelEl.textContent = strictnessLabel(strictness);
-
-  const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
-  document.getElementById("keyStatus").textContent = jevApiKey
-    ? "API key saved ✓"
-    : "No API key saved";
+  const { censorMode, strictness } = await getSettings();
+  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked = true;
+  $("strictness").value = strictness;
+  $("strictnessLabel").textContent = strictnessLabel(strictness);
+  refreshKeyStatus();
 }
-document.addEventListener("DOMContentLoaded", loadSettings);
-document.addEventListener("DOMContentLoaded", loadTopics);
+
+// ---- Wire up ------------------------------------------------------------
+
+$("addTopic").addEventListener("click", addTopic);
+$("newTopic").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") addTopic();
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadTopics();
+  loadSettings();
+  wireCensorMode();
+  wireStrictness();
+  wireApiKey();
+});
