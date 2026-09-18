@@ -22,6 +22,15 @@
   "action": {
     "default_popup": "/popup/popup.html"
   },
+  "commands": {
+    "run-filter": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Ctrl+B"
+      },
+      "description": "Filter the current page"
+    }
+  },
   "options_page": "options/options.html",
   "web_accessible_resources": [
     {

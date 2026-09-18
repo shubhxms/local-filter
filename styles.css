@@ -1,8 +1,24 @@
-/* Local Filter — blurred blocks. */
+/* Local Filter — censor styles for matched blocks. */
+
 .local-filter-blur {
   filter: blur(5px);
   opacity: 0.35;
   transition:
     filter 0.25s ease,
     opacity 0.25s ease;
+}
+
+.local-filter-black {
+  background: #000;
+  color: transparent;
+  border-radius: 2px;
+  transition: background 0.25s ease;
+}
+
+.local-filter-pixelate {
+  filter: url(#local-filter-pixelate);
+}
+
+.local-filter-hide {
+  display: none;
 }

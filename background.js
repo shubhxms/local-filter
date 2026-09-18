@@ -29,6 +29,18 @@ async function fetchWithTimeout(url, options) {
 // NOTE: the listener signature is positional (message, sender, sendResponse) —
 // do NOT drop the middle parameter to satisfy the unused-variable lint;
 // that shifts sendResponse into sender's slot and every reply throws.
+// Keyboard shortcut (⌘⌃B on macOS) — same as clicking the popup button.
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "run-filter") return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "FILTER" });
+  } catch {
+    console.log("[Background] No content script on this page — nothing to filter.");
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "classifySentences") {
     classifyBatch(message)

@@ -7,7 +7,13 @@
 const BLOCK_SELECTOR =
   "p, h1, h2, h3, h4, h5, h6, li, blockquote, figcaption, td, th, dd, dt, pre";
 const SKIP_ANCESTORS = 'nav, header, footer, aside, [aria-hidden="true"]';
-const BLUR_CLASS = "local-filter-blur";
+// Censor style applied to matched blocks; keys match storage.censorMode.
+const MODE_CLASSES = {
+  blur: "local-filter-blur",
+  black: "local-filter-black",
+  pixelate: "local-filter-pixelate",
+  hide: "local-filter-hide",
+};
 const MAX_SENTENCES_PER_ELEMENT = 20; // sanity cap for pathological blocks
 const CONCURRENCY = 4; // blocks classified in parallel
 const OBSERVER_MARGIN = "50% 0px 250% 0px"; // classify a few scroll units ahead
@@ -33,8 +39,8 @@ function thresholdsFor(strictness) {
 }
 
 async function startRun(seq) {
-  const { topics = [] } = await chrome.storage.sync.get("topics");
-  const { strictness = 0.5 } = await chrome.storage.sync.get("strictness");
+  const { topics = [], strictness = 0.5, censorMode = "blur" } =
+    await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;
@@ -46,14 +52,18 @@ async function startRun(seq) {
     return;
   }
 
+  if (censorMode === "pixelate") ensurePixelateFilter();
+
   if (run) run.stop();
-  run = new Run(topics, thresholdsFor(strictness));
+  run = new Run(topics, thresholdsFor(strictness), censorMode);
   run.start();
 }
 
 class Run {
-  constructor(topics, thresholds) {
+  constructor(topics, thresholds, mode) {
     this.topics = topics;
+    this.thresholds = thresholds;
+    this.mode = mode;
     this.thresholds = thresholds;
     this.classified = 0;
     this.blurred = 0;
@@ -93,7 +103,9 @@ class Run {
     this.stopped = true;
     this.observer?.disconnect();
     this.queue = [];
-    for (const el of this.blocks.keys()) el.classList.remove(BLUR_CLASS);
+    for (const el of this.blocks.keys()) {
+      el.classList.remove(...Object.values(MODE_CLASSES));
+    }
   }
 
   // Keep at most CONCURRENCY requests to the background in flight.
@@ -175,9 +187,9 @@ class Run {
 
     if (matched > 0 && matched / sentences.length >= paragraphFraction) {
       this.blurred++;
-      el.classList.add(BLUR_CLASS);
+      el.classList.add(MODE_CLASSES[this.mode] ?? MODE_CLASSES.blur);
       console.log(
-        `[LocalFilter] Blurred <${el.tagName.toLowerCase()}> — ${matched}/${sentences.length} sentences matched`,
+        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${this.mode}) — ${matched}/${sentences.length} sentences matched`,
       );
     }
 
@@ -199,6 +211,25 @@ function collectBlocks() {
     blocks.push(el);
   }
   return blocks;
+}
+
+// The pixelate mode needs an SVG filter def in the page; inject it once, lazily.
+function ensurePixelateFilter() {
+  if (document.getElementById("local-filter-pixelate")) return;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "0");
+  svg.setAttribute("height", "0");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.position = "absolute";
+  svg.innerHTML =
+    '<filter id="local-filter-pixelate">' +
+    '<feFlood x="4" y="4" height="2" width="2"/>' +
+    '<feComposite width="10" height="10"/>' +
+    '<feTile result="a"/>' +
+    '<feComposite in="SourceGraphic" in2="a" operator="in"/>' +
+    '<feMorphology operator="dilate" radius="5"/>' +
+    "</filter>";
+  document.body.appendChild(svg);
 }
 
 function isVisible(el) {
