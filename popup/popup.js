@@ -28,9 +28,6 @@ $("strictness").addEventListener("change", (event) => {
 });
 
 $("filterBtn").addEventListener("click", async () => {
-  chrome.action.setBadgeBackgroundColor({ color: "#1c1a16" });
-  chrome.action.setBadgeText({ text: "•" });
-  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   chrome.tabs.sendMessage(tab.id, { type: "FILTER" });
   window.close();

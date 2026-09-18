@@ -30,13 +30,14 @@ async function fetchWithTimeout(url, options) {
 // do NOT drop the middle parameter to satisfy the unused-variable lint;
 // that shifts sendResponse into sender's slot and every reply throws.
 // Keyboard shortcut (⌘⌃B on macOS) — same as clicking the popup button.
+// NOTE: query lastFocusedWindow here — 'currentWindow' has no meaning in a
+// service worker and silently matches no tab.
 chrome.commands.onCommand.addListener(async (command) => {
-  // Acknowledge the shortcut with a brief badge pulse on the toolbar icon.
-  chrome.action.setBadgeBackgroundColor({ color: "#1c1a16" });
-  chrome.action.setBadgeText({ text: "•" });
-  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
   if (command !== "run-filter") return;
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
   if (!tab?.id) return;
   try {
     await chrome.tabs.sendMessage(tab.id, { type: "FILTER" });

@@ -27,6 +27,7 @@ const censoredElements = new Set(); // already-censored blocks, for instant rest
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "FILTER") {
+    showAck();
     startRun(++filterSeq);
   }
 });
@@ -241,6 +242,25 @@ function collectBlocks() {
 // Small serif toast, bottom-right — acknowledges every filter run.
 let toastEl = null;
 let toastTimer = null;
+// macOS-passkey-style acknowledgment: a square springs in and a check
+// draws itself inside. Runs on every FILTER — shortcut or button.
+let ackEl = null;
+let ackTimer = null;
+function showAck() {
+  ackEl?.remove();
+  clearTimeout(ackTimer);
+  ackEl = document.createElement("div");
+  ackEl.className = "local-filter-ack";
+  ackEl.innerHTML =
+    '<div class="box"><svg viewBox="0 0 64 64" aria-hidden="true">' +
+    '<path d="M20 33 L29 42 L45 24"/></svg></div>';
+  document.body.appendChild(ackEl);
+  ackTimer = setTimeout(() => {
+    ackEl?.remove();
+    ackEl = null;
+  }, 1200);
+}
+
 function showToast(text) {
   if (!toastEl) {
     toastEl = document.createElement("div");
