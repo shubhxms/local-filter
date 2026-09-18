@@ -3,21 +3,21 @@
 // One request per message: every sentence x topic becomes a named noul
 // question, answered in a single parallel pass.
 
-const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
-const JEV_MODEL = 'jev-latest';
+const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+const JEV_MODEL = "jev-latest";
 
 chrome.runtime.onMessage.addListener((message, sendResponse) => {
-  if (message.action === 'classifySentences') {
+  if (message.action === "classifySentences") {
     classifyBatch(message)
-      .then(classifications => {
+      .then((classifications) => {
         sendResponse({ success: true, requestId: message.requestId, classifications });
       })
-      .catch(error => {
-        console.error('[Background] Classification failed:', error);
+      .catch((error) => {
+        console.error("[Background] Classification failed:", error);
         sendResponse({ success: false, requestId: message.requestId, error: error.message });
       });
 
-    return true;  // async sendResponse
+    return true; // async sendResponse
   }
 
   return false;
@@ -25,15 +25,15 @@ chrome.runtime.onMessage.addListener((message, sendResponse) => {
 
 async function classifyBatch({ sentences, topics }) {
   if (!Array.isArray(sentences) || sentences.length === 0) {
-    throw new Error('Sentences must be a non-empty array');
+    throw new Error("Sentences must be a non-empty array");
   }
   if (!Array.isArray(topics) || topics.length === 0) {
-    throw new Error('Topics must be a non-empty array');
+    throw new Error("Topics must be a non-empty array");
   }
 
-  const { jevApiKey: apiKey } = await chrome.storage.local.get('jevApiKey');
+  const { jevApiKey: apiKey } = await chrome.storage.local.get("jevApiKey");
   if (!apiKey) {
-    throw new Error('No Jev API key configured. Add one in the extension options.');
+    throw new Error("No Jev API key configured. Add one in the extension options.");
   }
 
   // Self-contained structured instructions bind each question to its sentence
@@ -42,24 +42,20 @@ async function classifyBatch({ sentences, topics }) {
   sentences.forEach((sentence, i) => {
     topics.forEach((topic, j) => {
       questions[`s${i}_t${j}`] = {
-        type: 'noul',
+        type: "noul",
         instructions: { question: `Is this sentence about ${topic}?`, sentence },
-        criteria: null
+        criteria: null,
       };
     });
   });
 
   const response = await fetch(JEV_ENDPOINT, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: JEV_MODEL,
-      state: { sentences },
-      questions
-    })
+    body: JSON.stringify({ model: JEV_MODEL, state: { sentences }, questions }),
   });
 
   if (!response.ok) {
@@ -70,11 +66,22 @@ async function classifyBatch({ sentences, topics }) {
   const data = await response.json();
 
   // Array aligned with the input sentences; content.js consumes by index.
+  // Validate every answer so a shape mismatch fails loudly instead of
+  // silently producing undefined scores.
   return sentences.map((sentence, i) => ({
     sequence: sentence,
     labels: topics,
-    scores: topics.map((_, j) => data.answers[`s${i}_t${j}`].noul)
+    scores: topics.map((_, j) => {
+      const key = `s${i}_t${j}`;
+      const answer = data.answers?.[key];
+      if (typeof answer?.noul !== "number" || !Number.isFinite(answer.noul)) {
+        throw new Error(
+          `Jev response missing answer ${key}: ${JSON.stringify(answer).slice(0, 200)}`
+        );
+      }
+      return answer.noul;
+    }),
   }));
 }
 
-console.log('[Background] Local Filter service worker loaded (jev-api)');
+console.log("[Background] Local Filter service worker loaded (jev-api)");
