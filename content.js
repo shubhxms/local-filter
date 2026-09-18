@@ -1,5 +1,6 @@
 // Local Filter - Content Script
-// Element-level extraction + scroll-driven classification.
+// Element-level extraction, classify everything on FILTER (scroll gating
+// removed while debugging; the queue still limits in-flight requests).
 // Sentences are the measurement unit (Jev scores them); block elements are
 // the action unit (the whole block blurs when enough of its sentences agree).
 
@@ -9,7 +10,6 @@ const SKIP_ANCESTORS = 'nav, header, footer, aside, [aria-hidden="true"]';
 const BLUR_CLASS = "local-filter-blur";
 const MAX_SENTENCES_PER_ELEMENT = 20; // sanity cap for pathological blocks
 const CONCURRENCY = 4; // blocks classified in parallel
-const OBSERVER_MARGIN = "50% 0px 250% 0px"; // classify a few scroll units ahead
 
 const SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
@@ -56,7 +56,6 @@ class Run {
     this.blocks = new Map(); // Element -> { status: 'queued' | 'inflight' | 'done' }
     this.queue = [];
     this.inFlight = 0;
-    this.observer = null;
     this.stopped = false;
   }
 
@@ -65,27 +64,16 @@ class Run {
       this.blocks.set(el, { status: "queued" });
     }
 
-    this.observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          this.observer.unobserve(entry.target);
-          this.queue.push(entry.target);
-          this.pump();
-        }
-      },
-      { rootMargin: OBSERVER_MARGIN },
-    );
-
-    for (const el of this.blocks.keys()) this.observer.observe(el);
+    this.queue.push(...this.blocks.keys());
+    this.errors = 0;
     console.log(
-      `[LocalFilter] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
+      `[LocalFilter] Classifying ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
     );
+    this.pump();
   }
 
   stop() {
     this.stopped = true;
-    this.observer?.disconnect();
     this.queue = [];
     for (const el of this.blocks.keys()) el.classList.remove(BLUR_CLASS);
   }
@@ -105,6 +93,11 @@ class Run {
       this.inFlight++;
       this.classify(el).finally(() => {
         this.inFlight--;
+        if (!this.stopped && this.queue.length === 0 && this.inFlight === 0) {
+          console.log(
+            `[LocalFilter] Run complete: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
+          );
+        }
         this.pump();
       });
     }
@@ -129,6 +122,7 @@ class Run {
 
       this.apply(el, sentences, response.classifications);
     } catch (error) {
+      this.errors++;
       console.error("[LocalFilter] Classification failed:", error);
     } finally {
       const state = this.blocks.get(el);
@@ -145,9 +139,15 @@ class Run {
     const best = Math.max(...classifications.flatMap((c) => c.scores));
 
     this.classified++;
-    console.debug(
+    console.log(
       `[LocalFilter] <${el.tagName.toLowerCase()}> ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
     );
+    if (this.classified === 1) {
+      console.log(
+        "[LocalFilter] First block sample:",
+        JSON.stringify(classifications).slice(0, 300),
+      );
+    }
 
     if (matched > 0 && matched / sentences.length >= paragraphFraction) {
       this.blurred++;
@@ -158,7 +158,9 @@ class Run {
     }
 
     if (this.classified % 25 === 0) {
-      console.log(`[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} blurred`);
+      console.log(
+        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} blurred`,
+      );
     }
   }
 }
