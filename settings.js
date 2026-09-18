@@ -132,10 +132,25 @@ function wireSlider(id, labelId, labelFor, storageKey) {
 }
 
 function wireApiKey() {
-  const saveButton = $("saveKey");
-  if (!saveButton) return;
+  const form = $("keyForm");
+  if (!form) return;
 
-  saveButton.addEventListener("click", async () => {
+  // Saved state shows just 'Change key'; the form only appears then,
+  // and only Save commits — no accidental overwrites.
+  $("changeKey")?.addEventListener("click", () => {
+    $("keySaved").hidden = true;
+    form.hidden = false;
+    $("apiKey").focus();
+  });
+
+  $("apiKey").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      $("apiKey").value = "";
+      refreshKeyStatus(); // restore whichever state is true
+    }
+  });
+
+  $("saveKey").addEventListener("click", async () => {
     const input = $("apiKey");
     const key = input.value.trim();
     if (!key) return;
@@ -146,12 +161,13 @@ function wireApiKey() {
 }
 
 async function refreshKeyStatus() {
-  const status = $("keyStatus");
-  if (!status) return;
+  const savedRow = $("keySaved");
+  if (!savedRow) return;
 
   const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
-  status.textContent = jevApiKey ? "Key saved" : "No key saved yet";
-  status.classList.toggle("ok", Boolean(jevApiKey));
+  const hasKey = Boolean(jevApiKey);
+  savedRow.hidden = !hasKey;
+  $("keyForm").hidden = hasKey;
 }
 
 async function loadSettings() {

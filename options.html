@@ -75,11 +75,14 @@
 
     <section>
       <span class="field-label">Jev API Key</span>
-      <div class="add-row">
+      <div class="add-row" id="keyForm" hidden>
         <input type="password" id="apiKey" placeholder="console.typesafe.ai">
         <button id="saveKey" class="ghost">Save</button>
       </div>
-      <div class="status" id="keyStatus"></div>
+      <div class="key-saved" id="keySaved" hidden>
+        <span class="status ok">Key saved</span>
+        <button id="changeKey" class="ghost">Change key</button>
+      </div>
     </section>
   </main>
   <script src="/shared-ui.js"></script>

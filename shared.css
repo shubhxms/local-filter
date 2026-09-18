@@ -362,6 +362,17 @@ body.settings section:first-of-type {
   flex: 1;
 }
 
+/* The hidden attribute must beat any display rule. */
+[hidden] {
+  display: none !important;
+}
+
+.key-saved {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
 .prose {
   font-size: 14px;
   line-height: 1.65;
