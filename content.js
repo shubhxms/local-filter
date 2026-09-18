@@ -30,9 +30,14 @@ const censoredElements = new Set(); // already-censored blocks, for instant rest
 // Switching censor mode restyles already-censored blocks instantly — no
 // re-classification. (Registered before the message listener; keep it
 // top-level so range edits to the listener cannot clobber it again.)
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "sync" || !changes.censorMode) return;
-  currentMode = changes.censorMode.newValue ?? "blur";
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  const siteKey = `lf-site:${location.origin}`;
+  const relevant =
+    (area === "sync" && changes.censorMode) ||
+    (area === "local" && changes[siteKey]);
+  if (!relevant) return;
+
+  currentMode = await effectiveMode();
   if (currentMode === "pixelate") ensurePixelateFilter();
   const cls = MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur;
   for (const el of censoredElements) {
@@ -74,8 +79,7 @@ async function startRun(seq) {
   const {
     topics = [],
     strictness = 0.5,
-    censorMode = "blur",
-  } = await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
+  } = await chrome.storage.sync.get(["topics", "strictness"]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;
@@ -87,9 +91,8 @@ async function startRun(seq) {
     return;
   }
 
-  if (censorMode === "pixelate") ensurePixelateFilter();
-
-  currentMode = censorMode;
+  currentMode = await effectiveMode();
+  if (currentMode === "pixelate") ensurePixelateFilter();
 
   // Per-page verdict cache, keyed by URL + topics + strictness, so
   // re-filtering or revisiting a page costs no API calls.
@@ -261,7 +264,9 @@ class Run {
       this.blurred++;
       el.classList.add(MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur);
       censoredElements.add(el);
-      showToast(`${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`);
+      showToast(
+        `${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`,
+      );
       console.log(
         `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
       );
@@ -288,6 +293,15 @@ class Run {
       console.error("[LocalFilter] Failed to save page results:", error);
     }
   }
+}
+
+// Censor style: per-site override wins over the global default.
+async function effectiveMode() {
+  const key = `lf-site:${location.origin}`;
+  const site = (await chrome.storage.local.get(key))[key];
+  if (site) return site;
+  const { censorMode = "blur" } = await chrome.storage.sync.get("censorMode");
+  return censorMode;
 }
 
 // djb2 — cheap, stable fingerprint of block text.

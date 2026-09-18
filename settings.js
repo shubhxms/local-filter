@@ -1,6 +1,10 @@
 // Shared settings wiring — included by popup.html and options.html.
-// Pages may omit sections; every wire is defensive, so either page can
-// carry any subset of the controls below.
+//
+// Censor style scope: the popup (body.popup) writes a per-site override
+// for the tab it was opened on (window.LF_SITE_ORIGIN, set by popup.js
+// before initSettings runs); every other page writes the global default.
+//
+// Every wire is defensive — either page can carry any subset of controls.
 
 const $ = (id) => document.getElementById(id);
 
@@ -51,10 +55,18 @@ async function addTopic() {
 // ---- Censor mode, strictness, API key ------------------------------------
 
 function wireCensorMode() {
+  const scoped = document.body.classList.contains("popup");
+
   document.querySelectorAll("#censorMode input").forEach((input) => {
-    input.addEventListener("change", () =>
-      chrome.storage.sync.set({ censorMode: input.value }),
-    );
+    input.addEventListener("change", async () => {
+      if (scoped && window.LF_SITE_ORIGIN) {
+        await chrome.storage.local.set({
+          [`lf-site:${window.LF_SITE_ORIGIN}`]: input.value,
+        });
+      } else {
+        await chrome.storage.sync.set({ censorMode: input.value });
+      }
+    });
   });
 }
 
@@ -96,15 +108,20 @@ async function refreshKeyStatus() {
 }
 
 async function loadSettings() {
-  const { censorMode, strictness } = await getSettings();
+  const scoped = document.body.classList.contains("popup") &&
+    window.LF_SITE_ORIGIN;
+  const mode = scoped
+    ? await getEffectiveCensorMode(window.LF_SITE_ORIGIN)
+    : (await getSettings()).censorMode;
 
   const modeInput = document.querySelector(
-    `#censorMode input[value="${censorMode}"]`,
+    `#censorMode input[value="${mode}"]`,
   );
   if (modeInput) modeInput.checked = true;
 
   const slider = $("strictness");
   if (slider) {
+    const { strictness } = await getSettings();
     slider.value = strictness;
     $("strictnessLabel").textContent = strictnessLabel(strictness);
   }
@@ -114,7 +131,7 @@ async function loadSettings() {
 
 // ---- Init ----------------------------------------------------------------
 
-document.addEventListener("DOMContentLoaded", () => {
+function initSettings() {
   $("addTopic")?.addEventListener("click", addTopic);
   $("newTopic")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") addTopic();
@@ -124,4 +141,10 @@ document.addEventListener("DOMContentLoaded", () => {
   wireApiKey();
   loadTopics();
   loadSettings();
-});
+}
+
+// The options page boots itself; the popup resolves the current tab's
+// origin first (async) and then calls initSettings from popup.js.
+if (!document.body.classList.contains("popup")) {
+  document.addEventListener("DOMContentLoaded", initSettings);
+}

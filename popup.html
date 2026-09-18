@@ -10,12 +10,15 @@
     <p class="subtitle">Censor what you'd rather not read.</p>
 
     <section>
-      <span class="field-label">Censor</span>
-      <div class="segmented" id="censorMode">
+      <span class="field-label">Censor — this site</span>
+      <div class="choices" id="censorMode">
         <label><input type="radio" name="censor" value="blur"><span>Blur</span></label>
         <label><input type="radio" name="censor" value="black"><span>Black</span></label>
         <label><input type="radio" name="censor" value="pixelate"><span>Pixelate</span></label>
         <label><input type="radio" name="censor" value="hide"><span>Hide</span></label>
+      </div>
+      <div style="margin-top: 6px;">
+        <button id="setGlobalMode" class="ghost">Set as global</button>
       </div>
     </section>
 
