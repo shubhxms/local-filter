@@ -54,7 +54,9 @@ function wireCensorMode() {
 function wireStrictness() {
   const slider = $("strictness");
   slider.addEventListener("input", () => {
-    $("strictnessLabel").textContent = strictnessLabel(parseFloat(slider.value));
+    $("strictnessLabel").textContent = strictnessLabel(
+      parseFloat(slider.value),
+    );
   });
   slider.addEventListener("change", () => {
     chrome.storage.sync.set({ strictness: parseFloat(slider.value) });
@@ -81,7 +83,8 @@ async function refreshKeyStatus() {
 
 async function loadSettings() {
   const { censorMode, strictness } = await getSettings();
-  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked = true;
+  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked =
+    true;
   $("strictness").value = strictness;
   $("strictnessLabel").textContent = strictnessLabel(strictness);
   refreshKeyStatus();

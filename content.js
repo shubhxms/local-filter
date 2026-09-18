@@ -22,10 +22,24 @@ const SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
 let run = null;
 let filterSeq = 0; // guards against stacked FILTER clicks racing through startRun
+let currentMode = "blur"; // live censor mode; updated by storage changes too
+const censoredElements = new Set(); // already-censored blocks, for instant restyling
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "FILTER") {
     startRun(++filterSeq);
+  }
+});
+
+// Switching censor mode restyles already-censored blocks instantly — no re-classification.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync" || !changes.censorMode) return;
+  currentMode = changes.censorMode.newValue ?? "blur";
+  if (currentMode === "pixelate") ensurePixelateFilter();
+  const cls = MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur;
+  for (const el of censoredElements) {
+    el.classList.remove(...Object.values(MODE_CLASSES));
+    el.classList.add(cls);
   }
 });
 
@@ -39,8 +53,11 @@ function thresholdsFor(strictness) {
 }
 
 async function startRun(seq) {
-  const { topics = [], strictness = 0.5, censorMode = "blur" } =
-    await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
+  const {
+    topics = [],
+    strictness = 0.5,
+    censorMode = "blur",
+  } = await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;
@@ -54,16 +71,17 @@ async function startRun(seq) {
 
   if (censorMode === "pixelate") ensurePixelateFilter();
 
+  currentMode = censorMode;
+
   if (run) run.stop();
-  run = new Run(topics, thresholdsFor(strictness), censorMode);
+  run = new Run(topics, thresholdsFor(strictness));
   run.start();
+  showToast("Filtering…");
 }
 
 class Run {
-  constructor(topics, thresholds, mode) {
+  constructor(topics, thresholds) {
     this.topics = topics;
-    this.thresholds = thresholds;
-    this.mode = mode;
     this.thresholds = thresholds;
     this.classified = 0;
     this.blurred = 0;
@@ -104,6 +122,7 @@ class Run {
     this.observer?.disconnect();
     this.queue = [];
     for (const el of this.blocks.keys()) {
+      censoredElements.delete(el);
       el.classList.remove(...Object.values(MODE_CLASSES));
     }
   }
@@ -127,6 +146,9 @@ class Run {
           console.log(
             `[LocalFilter] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
           );
+          if (this.blurred === 0 && this.errors === 0) {
+            showToast("Nothing matched");
+          }
         }
         this.pump();
       });
@@ -187,9 +209,11 @@ class Run {
 
     if (matched > 0 && matched / sentences.length >= paragraphFraction) {
       this.blurred++;
-      el.classList.add(MODE_CLASSES[this.mode] ?? MODE_CLASSES.blur);
+      el.classList.add(MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur);
+      censoredElements.add(el);
+      showToast(`${this.blurred} censored`);
       console.log(
-        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${this.mode}) — ${matched}/${sentences.length} sentences matched`,
+        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode}) — ${matched}/${sentences.length} sentences matched`,
       );
     }
 
@@ -214,6 +238,21 @@ function collectBlocks() {
 }
 
 // The pixelate mode needs an SVG filter def in the page; inject it once, lazily.
+// Small serif toast, bottom-right — acknowledges every filter run.
+let toastEl = null;
+let toastTimer = null;
+function showToast(text) {
+  if (!toastEl) {
+    toastEl = document.createElement("div");
+    toastEl.className = "local-filter-toast";
+    document.body.appendChild(toastEl);
+  }
+  toastEl.textContent = text;
+  toastEl.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl?.classList.remove("visible"), 2500);
+}
+
 function ensurePixelateFilter() {
   if (document.getElementById("local-filter-pixelate")) return;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");

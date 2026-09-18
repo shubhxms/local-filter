@@ -31,13 +31,19 @@ async function fetchWithTimeout(url, options) {
 // that shifts sendResponse into sender's slot and every reply throws.
 // Keyboard shortcut (⌘⌃B on macOS) — same as clicking the popup button.
 chrome.commands.onCommand.addListener(async (command) => {
+  // Acknowledge the shortcut with a brief badge pulse on the toolbar icon.
+  chrome.action.setBadgeBackgroundColor({ color: "#1c1a16" });
+  chrome.action.setBadgeText({ text: "•" });
+  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
   if (command !== "run-filter") return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
   try {
     await chrome.tabs.sendMessage(tab.id, { type: "FILTER" });
   } catch {
-    console.log("[Background] No content script on this page — nothing to filter.");
+    console.log(
+      "[Background] No content script on this page — nothing to filter.",
+    );
   }
 });
 

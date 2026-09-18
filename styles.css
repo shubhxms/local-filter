@@ -1,4 +1,13 @@
-/* Local Filter — censor styles for matched blocks. */
+/* Local Filter — censor styles for matched blocks, and the toast. */
+
+/* Censored text must not be selectable — no leaking via copy/paste. */
+.local-filter-blur,
+.local-filter-black,
+.local-filter-pixelate,
+.local-filter-hide {
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 .local-filter-blur {
   filter: blur(5px);
@@ -8,11 +17,27 @@
     opacity 0.25s ease;
 }
 
+/* Black is a full redaction bar: every descendant is inked out, links
+   lose their blue and underline, images and icons vanish. */
+.local-filter-black,
+.local-filter-black * {
+  color: transparent !important;
+  text-decoration: none !important;
+  cursor: default;
+}
+
+.local-filter-black,
+.local-filter-black * {
+  background-color: #000 !important;
+  border-color: transparent !important;
+}
+
 .local-filter-black {
-  background: #000;
-  color: transparent;
   border-radius: 2px;
-  transition: background 0.25s ease;
+}
+
+.local-filter-black :is(img, svg, video, iframe, canvas) {
+  visibility: hidden;
 }
 
 .local-filter-pixelate {
@@ -21,4 +46,31 @@
 
 .local-filter-hide {
   display: none;
+}
+
+/* Toast — acknowledges a filter run; same design language as the UI. */
+.local-filter-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 13px;
+  color: #1c1a16;
+  background: #faf8f3;
+  border: 1px solid #e4ded2;
+  border-radius: 6px;
+  padding: 6px 12px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.08);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+  pointer-events: none;
+}
+
+.local-filter-toast.visible {
+  opacity: 1;
+  transform: none;
 }

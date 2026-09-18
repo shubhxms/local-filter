@@ -2,7 +2,8 @@ const $ = (id) => document.getElementById(id);
 
 async function load() {
   const { censorMode, strictness } = await getSettings();
-  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked = true;
+  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked =
+    true;
   $("strictness").value = strictness;
   $("strictnessLabel").textContent = strictnessLabel(strictness);
 
@@ -17,7 +18,9 @@ document.querySelectorAll("#censorMode input").forEach((input) => {
 });
 
 $("strictness").addEventListener("input", (event) => {
-  $("strictnessLabel").textContent = strictnessLabel(parseFloat(event.target.value));
+  $("strictnessLabel").textContent = strictnessLabel(
+    parseFloat(event.target.value),
+  );
 });
 
 $("strictness").addEventListener("change", (event) => {
@@ -25,6 +28,9 @@ $("strictness").addEventListener("change", (event) => {
 });
 
 $("filterBtn").addEventListener("click", async () => {
+  chrome.action.setBadgeBackgroundColor({ color: "#1c1a16" });
+  chrome.action.setBadgeText({ text: "•" });
+  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   chrome.tabs.sendMessage(tab.id, { type: "FILTER" });
   window.close();
