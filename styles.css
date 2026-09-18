@@ -74,11 +74,11 @@
   opacity: 1;
   transform: none;
 
-body.popup #topicsList {
-  max-height: 128px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
+  body.popup #topicsList {
+    max-height: 128px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
 }
 
 /* Acknowledgment — the passkey-style verified square. */
@@ -94,11 +94,11 @@ body.popup #topicsList {
 }
 
 .local-filter-ack .box {
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
   background: #faf8f3;
   border: 1px solid #e4ded2;
-  border-radius: 18px;
+  border-radius: 24px;
   box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
   display: flex;
   align-items: center;
@@ -107,8 +107,8 @@ body.popup #topicsList {
 }
 
 .local-filter-ack svg {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
 }
 
 .local-filter-ack path {

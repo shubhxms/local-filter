@@ -25,22 +25,23 @@ let filterSeq = 0; // guards against stacked FILTER clicks racing through startR
 let currentMode = "blur"; // live censor mode; updated by storage changes too
 const censoredElements = new Set(); // already-censored blocks, for instant restyling
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "FILTER") {
     showAck();
     startRun(++filterSeq);
   }
-});
 
-// Switching censor mode restyles already-censored blocks instantly — no re-classification.
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "sync" || !changes.censorMode) return;
-  currentMode = changes.censorMode.newValue ?? "blur";
-  if (currentMode === "pixelate") ensurePixelateFilter();
-  const cls = MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur;
-  for (const el of censoredElements) {
-    el.classList.remove(...Object.values(MODE_CLASSES));
-    el.classList.add(cls);
+  // Popup asks for the current page's numbers.
+  if (message.type === "GET_STATS") {
+    sendResponse(
+      run
+        ? {
+            watching: run.blocks.size,
+            classified: run.classified,
+            censored: run.blurred,
+          }
+        : null,
+    );
   }
 });
 
@@ -298,8 +299,9 @@ function isVisible(el) {
 
 function segment(text) {
   const trimmed = text.trim();
-  const sentences = Array.from(SEGMENTER.segment(trimmed), (s) => s.segment.trim())
-    .filter((s) => s.length > 10)
+  const sentences = Array.from(SEGMENTER.segment(trimmed), (s) =>
+    s.segment.trim(),
+  ).filter((s) => s.length > 10);
 
   // Short standalone text — headings, list items — has no long sentences,
   // but it is still worth classifying as a single unit.

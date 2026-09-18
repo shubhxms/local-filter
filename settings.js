@@ -1,13 +1,16 @@
 // Shared settings wiring — included by popup.html and options.html.
-// Both pages use identical section markup; this self-initializes.
+// Pages may omit sections; every wire is defensive, so either page can
+// carry any subset of the controls below.
 
 const $ = (id) => document.getElementById(id);
 
-// ---- Topics -------------------------------------------------------------
+// ---- Topics (options page) ----------------------------------------------
 
 async function loadTopics() {
-  const { topics } = await getSettings();
   const list = $("topicsList");
+  if (!list) return;
+
+  const { topics } = await getSettings();
   list.innerHTML = "";
 
   for (const topic of topics) {
@@ -35,6 +38,7 @@ async function loadTopics() {
 
 async function addTopic() {
   const input = $("newTopic");
+  if (!input) return;
   const topic = input.value.trim();
   if (!topic) return;
 
@@ -44,7 +48,7 @@ async function addTopic() {
   loadTopics();
 }
 
-// ---- Settings -----------------------------------------------------------
+// ---- Censor mode, strictness, API key ------------------------------------
 
 function wireCensorMode() {
   document.querySelectorAll("#censorMode input").forEach((input) => {
@@ -56,8 +60,12 @@ function wireCensorMode() {
 
 function wireStrictness() {
   const slider = $("strictness");
+  if (!slider) return;
+
   slider.addEventListener("input", () => {
-    $("strictnessLabel").textContent = strictnessLabel(parseFloat(slider.value));
+    $("strictnessLabel").textContent = strictnessLabel(
+      parseFloat(slider.value),
+    );
   });
   slider.addEventListener("change", () => {
     chrome.storage.sync.set({ strictness: parseFloat(slider.value) });
@@ -65,7 +73,10 @@ function wireStrictness() {
 }
 
 function wireApiKey() {
-  $("saveKey").addEventListener("click", async () => {
+  const saveButton = $("saveKey");
+  if (!saveButton) return;
+
+  saveButton.addEventListener("click", async () => {
     const input = $("apiKey");
     const key = input.value.trim();
     if (!key) return;
@@ -76,26 +87,36 @@ function wireApiKey() {
 }
 
 async function refreshKeyStatus() {
-  const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
   const status = $("keyStatus");
+  if (!status) return;
+
+  const { jevApiKey } = await chrome.storage.local.get("jevApiKey");
   status.textContent = jevApiKey ? "Key saved" : "No key saved yet";
   status.classList.toggle("ok", Boolean(jevApiKey));
 }
 
 async function loadSettings() {
   const { censorMode, strictness } = await getSettings();
-  document.querySelector(`#censorMode input[value="${censorMode}"]`).checked =
-    true;
-  $("strictness").value = strictness;
-  $("strictnessLabel").textContent = strictnessLabel(strictness);
+
+  const modeInput = document.querySelector(
+    `#censorMode input[value="${censorMode}"]`,
+  );
+  if (modeInput) modeInput.checked = true;
+
+  const slider = $("strictness");
+  if (slider) {
+    slider.value = strictness;
+    $("strictnessLabel").textContent = strictnessLabel(strictness);
+  }
+
   refreshKeyStatus();
 }
 
 // ---- Init ----------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
-  $("addTopic").addEventListener("click", addTopic);
-  $("newTopic").addEventListener("keydown", (event) => {
+  $("addTopic")?.addEventListener("click", addTopic);
+  $("newTopic")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") addTopic();
   });
   wireCensorMode();
