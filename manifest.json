@@ -3,8 +3,8 @@
   "name": "Local Filter",
   "version": "1.0",
   "description": "A local semantic filter using zero-shot classification!",
-  "permissions": ["storage", "activeTab", "offscreen"],
-  "host_permissions": ["https://*/", "http://*/"],
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://api.typesafe.ai/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

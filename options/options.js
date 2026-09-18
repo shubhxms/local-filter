@@ -40,4 +40,14 @@ async function deleteTopic(topicToDelete) {
 }
 
 document.getElementById('addTopic').addEventListener('click', addTopic);
+
+document.getElementById('saveKey').addEventListener('click', async () => {
+  const input = document.getElementById('apiKey');
+  const key = input.value.trim();
+  if (key) {
+    await chrome.storage.local.set({ jevApiKey: key });
+    input.value = '';
+    input.placeholder = 'Saved ✓';
+  }
+});
 document.addEventListener('DOMContentLoaded', loadTopics);
