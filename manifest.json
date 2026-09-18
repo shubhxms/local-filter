@@ -20,7 +20,7 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
   },
   "action": {
-    "default_popup": "/popup/popup.html"
+    "default_popup": "popup.html"
   },
   "commands": {
     "run-filter": {
@@ -31,7 +31,7 @@
       "description": "Filter the current page"
     }
   },
-  "options_page": "options/options.html",
+  "options_page": "options.html",
   "web_accessible_resources": [
     {
       "resources": ["libs/*"],

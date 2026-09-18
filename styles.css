@@ -73,6 +73,12 @@
 .local-filter-toast.visible {
   opacity: 1;
   transform: none;
+
+body.popup #topicsList {
+  max-height: 128px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
 }
 
 /* Acknowledgment — the passkey-style verified square. */
@@ -97,8 +103,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: local-filter-ack-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)
-    both;
+  animation: local-filter-ack-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .local-filter-ack svg {
@@ -145,4 +150,3 @@
     opacity: 0;
   }
 }
-

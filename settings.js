@@ -1,3 +1,6 @@
+// Shared settings wiring — included by popup.html and options.html.
+// Both pages use identical section markup; this self-initializes.
+
 const $ = (id) => document.getElementById(id);
 
 // ---- Topics -------------------------------------------------------------
@@ -54,9 +57,7 @@ function wireCensorMode() {
 function wireStrictness() {
   const slider = $("strictness");
   slider.addEventListener("input", () => {
-    $("strictnessLabel").textContent = strictnessLabel(
-      parseFloat(slider.value),
-    );
+    $("strictnessLabel").textContent = strictnessLabel(parseFloat(slider.value));
   });
   slider.addEventListener("change", () => {
     chrome.storage.sync.set({ strictness: parseFloat(slider.value) });
@@ -90,17 +91,16 @@ async function loadSettings() {
   refreshKeyStatus();
 }
 
-// ---- Wire up ------------------------------------------------------------
-
-$("addTopic").addEventListener("click", addTopic);
-$("newTopic").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") addTopic();
-});
+// ---- Init ----------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadTopics();
-  loadSettings();
+  $("addTopic").addEventListener("click", addTopic);
+  $("newTopic").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") addTopic();
+  });
   wireCensorMode();
   wireStrictness();
   wireApiKey();
+  loadTopics();
+  loadSettings();
 });

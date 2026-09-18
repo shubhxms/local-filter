@@ -27,14 +27,33 @@
       </div>
     </section>
 
+    <section>
+      <span class="field-label">Topics</span>
+      <div id="topicsList"></div>
+      <div class="add-row">
+        <input type="text" id="newTopic" placeholder="Add a topic">
+        <button id="addTopic" class="ghost">Add</button>
+      </div>
+    </section>
+
+    <section>
+      <span class="field-label">Jev API Key</span>
+      <div class="add-row">
+        <input type="password" id="apiKey" placeholder="console.typesafe.ai">
+        <button id="saveKey" class="ghost">Save</button>
+      </div>
+      <div class="status" id="keyStatus"></div>
+    </section>
+
     <button id="filterBtn" class="primary">Filter this page</button>
 
     <footer>
-      <a href="#" id="openOptions">All settings</a>
+      <a href="#" id="openOptions">Open in new tab ↗</a>
       <kbd id="shortcutHint"></kbd>
     </footer>
   </main>
   <script src="/shared-ui.js"></script>
+  <script src="/settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
