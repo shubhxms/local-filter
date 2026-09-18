@@ -291,7 +291,9 @@ input[type="password"]:focus {
 /* Popup layout */
 
 body.popup {
-  width: 280px;
+  /* Chrome popups are fixed-size (no resize affordance exists) — 320px
+     gives the choices row, slider and stats room to breathe. */
+  width: 320px;
   padding: 20px 20px 16px;
 }
 
