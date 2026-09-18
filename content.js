@@ -6,7 +6,9 @@
 
 const BLOCK_SELECTOR =
   "p, h1, h2, h3, h4, h5, h6, li, blockquote, figcaption, td, th, dd, dt, pre";
-const SKIP_ANCESTORS = 'nav, header, footer, aside, [aria-hidden="true"]';
+// NOTE: header/aside are deliberately NOT skipped — page H1s and section
+// headings often live inside them; site chrome is covered by nav/footer.
+const SKIP_ANCESTORS = 'nav, footer, [aria-hidden="true"]';
 // Censor style applied to matched blocks; keys match storage.censorMode.
 const MODE_CLASSES = {
   blur: "local-filter-blur",
@@ -24,6 +26,20 @@ let run = null;
 let filterSeq = 0; // guards against stacked FILTER clicks racing through startRun
 let currentMode = "blur"; // live censor mode; updated by storage changes too
 const censoredElements = new Set(); // already-censored blocks, for instant restyling
+
+// Switching censor mode restyles already-censored blocks instantly — no
+// re-classification. (Registered before the message listener; keep it
+// top-level so range edits to the listener cannot clobber it again.)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync" || !changes.censorMode) return;
+  currentMode = changes.censorMode.newValue ?? "blur";
+  if (currentMode === "pixelate") ensurePixelateFilter();
+  const cls = MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur;
+  for (const el of censoredElements) {
+    el.classList.remove(...Object.values(MODE_CLASSES));
+    el.classList.add(cls);
+  }
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "FILTER") {
@@ -75,16 +91,29 @@ async function startRun(seq) {
 
   currentMode = censorMode;
 
+  // Per-page verdict cache, keyed by URL + topics + strictness, so
+  // re-filtering or revisiting a page costs no API calls.
+  const cacheKey = `lf:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}`;
+  const stored = await chrome.storage.local.get(cacheKey);
+
   if (run) run.stop();
-  run = new Run(topics, thresholdsFor(strictness));
+  run = new Run(
+    topics,
+    thresholdsFor(strictness),
+    cacheKey,
+    stored[cacheKey] ?? {},
+  );
   run.start();
   showToast("Filtering…");
 }
 
 class Run {
-  constructor(topics, thresholds) {
+  constructor(topics, thresholds, cacheKey, cache = {}) {
     this.topics = topics;
     this.thresholds = thresholds;
+    this.cacheKey = cacheKey;
+    this.cache = cache; // text fingerprint -> censored (bool)
+    this.saveTimer = null;
     this.classified = 0;
     this.blurred = 0;
     this.id = crypto.randomUUID();
@@ -121,6 +150,7 @@ class Run {
 
   stop() {
     this.stopped = true;
+    clearTimeout(this.saveTimer);
     this.observer?.disconnect();
     this.queue = [];
     for (const el of this.blocks.keys()) {
@@ -148,6 +178,8 @@ class Run {
           console.log(
             `[LocalFilter] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
           );
+          clearTimeout(this.saveTimer);
+          this.save();
           if (this.blurred === 0 && this.errors === 0) {
             showToast("Nothing matched");
           }
@@ -162,6 +194,13 @@ class Run {
       const sentences = segment(el.innerText);
       if (sentences.length === 0) return;
 
+      // Cached verdict for this exact text? Skip the API entirely.
+      const fp = fingerprint(el.innerText.trim());
+      if (Object.hasOwn(this.cache, fp)) {
+        this.finish(el, this.cache[fp]);
+        return;
+      }
+
       const response = await chrome.runtime.sendMessage({
         action: "classifySentences",
         requestId: this.id,
@@ -174,7 +213,17 @@ class Run {
       if (!response?.success)
         throw new Error(response?.error || "No response from background");
 
-      this.apply(el, sentences, response.classifications);
+      if (this.classified === 0) {
+        console.log(
+          "[LocalFilter] First block sample:",
+          JSON.stringify(response.classifications).slice(0, 300),
+        );
+      }
+
+      const censored = this.verdictFor(sentences, response.classifications);
+      this.cache[fp] = censored;
+      this.scheduleSave();
+      this.finish(el, censored);
     } catch (error) {
       this.errors++;
       const hint = error.message.includes("message channel closed")
@@ -190,40 +239,74 @@ class Run {
     }
   }
 
-  // Blur the whole block when enough of its sentences match any topic.
-  apply(el, sentences, classifications) {
+  // Fresh result: threshold + agreement gate decide the verdict.
+  verdictFor(sentences, classifications) {
     const { sentence, paragraphFraction } = this.thresholds;
     const matched = classifications.filter((c) =>
       c.scores.some((score) => score >= sentence),
     ).length;
     const best = Math.max(...classifications.flatMap((c) => c.scores));
 
-    this.classified++;
     console.log(
-      `[LocalFilter] <${el.tagName.toLowerCase()}> ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
+      `[LocalFilter] <${"block"}> ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
     );
-    if (this.classified === 1) {
-      console.log(
-        "[LocalFilter] First block sample:",
-        JSON.stringify(classifications).slice(0, 300),
-      );
-    }
+    return matched > 0 && matched / sentences.length >= paragraphFraction;
+  }
 
-    if (matched > 0 && matched / sentences.length >= paragraphFraction) {
+  // Style a block per its verdict (fresh or cached).
+  finish(el, censored) {
+    this.classified++;
+
+    if (censored) {
       this.blurred++;
       el.classList.add(MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur);
       censoredElements.add(el);
-      showToast(`${this.blurred} censored`);
+      showToast(`${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`);
       console.log(
-        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode}) — ${matched}/${sentences.length} sentences matched`,
+        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
       );
     }
 
     if (this.classified % 25 === 0) {
       console.log(
-        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} blurred`,
+        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} censored`,
       );
     }
+  }
+
+  scheduleSave() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.save(), 1000);
+  }
+
+  async save() {
+    if (this.stopped) return;
+    try {
+      await chrome.storage.local.set({ [this.cacheKey]: this.cache });
+      await pruneResultCache(this.cacheKey);
+    } catch (error) {
+      console.error("[LocalFilter] Failed to save page results:", error);
+    }
+  }
+}
+
+// djb2 — cheap, stable fingerprint of block text.
+function fingerprint(text) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) {
+    h = (h * 33 + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+// Keep only the 20 most recent pages of cached verdicts.
+async function pruneResultCache(keepKey) {
+  const all = await chrome.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith("lf:"));
+  const excess = keys.length - 20;
+  if (excess <= 0) return;
+  for (const key of keys.slice(0, excess)) {
+    if (key !== keepKey) await chrome.storage.local.remove(key);
   }
 }
 
@@ -254,7 +337,10 @@ function showAck() {
   ackEl.className = "local-filter-ack";
   ackEl.innerHTML =
     '<div class="box"><svg viewBox="0 0 64 64" aria-hidden="true">' +
-    '<path d="M20 33 L29 42 L45 24"/></svg></div>';
+    '<rect x="14" y="21" width="36" height="6" rx="3"/>' +
+    '<rect x="14" y="29" width="27" height="6" rx="3"/>' +
+    '<rect x="14" y="37" width="32" height="6" rx="3"/>' +
+    "</svg></div>";
   document.body.appendChild(ackEl);
   ackTimer = setTimeout(() => {
     ackEl?.remove();

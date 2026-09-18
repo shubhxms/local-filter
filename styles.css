@@ -111,20 +111,26 @@
   height: 52px;
 }
 
-.local-filter-ack path {
-  fill: none;
-  stroke: #1c1a16;
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 40;
-  stroke-dashoffset: 40;
-  animation: local-filter-ack-draw 0.3s 0.15s ease-out forwards;
+.local-filter-ack rect {
+  fill: #1c1a16;
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: local-filter-ack-bar 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)
+    forwards;
 }
 
-@keyframes local-filter-ack-draw {
+.local-filter-ack rect:nth-of-type(2) {
+  animation-delay: 0.12s;
+}
+
+.local-filter-ack rect:nth-of-type(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes local-filter-ack-bar {
   to {
-    stroke-dashoffset: 0;
+    transform: scaleX(1);
   }
 }
 

@@ -24,7 +24,7 @@ async function loadPageStats() {
   try {
     const stats = await chrome.tabs.sendMessage(tab.id, { type: "GET_STATS" });
     $("pageStats").textContent = stats?.censored
-      ? `${stats.censored} censored on this page`
+      ? `${stats.censored} ${stats.censored === 1 ? "block" : "blocks"} censored on this page`
       : "";
   } catch {
     $("pageStats").textContent = "";
