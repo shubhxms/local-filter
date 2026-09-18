@@ -76,10 +76,13 @@ function thresholdsFor(strictness) {
 }
 
 async function startRun(seq) {
-  const { topics = [], strictness = 0.5 } = await chrome.storage.sync.get([
-    "topics",
-    "strictness",
-  ]);
+  const { topics = [], strictness = 0.5, qualities = [], mercy = 1 } =
+    await chrome.storage.sync.get([
+      "topics",
+      "strictness",
+      "qualities",
+      "mercy",
+    ]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;
@@ -96,7 +99,9 @@ async function startRun(seq) {
 
   // Per-page verdict cache, keyed by URL + topics + strictness, so
   // re-filtering or revisiting a page costs no API calls.
-  const cacheKey = `lf:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}`;
+  // Per-page verdict cache, keyed by everything a verdict depends on,
+  // so re-filtering or revisiting a page costs no API calls.
+  const cacheKey = `lf:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}|${qualities.join(",")}|${mercy}`;
   const stored = await chrome.storage.local.get(cacheKey);
 
   if (run) run.stop();
@@ -105,15 +110,19 @@ async function startRun(seq) {
     thresholdsFor(strictness),
     cacheKey,
     stored[cacheKey] ?? {},
+    qualities,
+    mercy,
   );
   run.start();
   showToast("Filtering…");
 }
 
 class Run {
-  constructor(topics, thresholds, cacheKey, cache = {}) {
+  constructor(topics, thresholds, cacheKey, cache = {}, qualities = [], mercy = 1) {
     this.topics = topics;
     this.thresholds = thresholds;
+    this.qualities = qualities; // redeeming qualities; empty = feature off
+    this.mercy = mercy; // redeem weight: override when redeemMean >= mercy * censorMean
     this.cacheKey = cacheKey;
     this.cache = cache; // text fingerprint -> censored (bool)
     this.saveTimer = null;
@@ -209,6 +218,7 @@ class Run {
         requestId: this.id,
         sentences,
         topics: this.topics,
+        qualities: this.qualities,
       });
 
       // A newer FILTER started meanwhile — drop stale results.
@@ -251,9 +261,27 @@ class Run {
     const best = Math.max(...classifications.flatMap((c) => c.scores));
 
     console.log(
-      `[LocalFilter] <${"block"}> ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
+      `[LocalFilter] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
     );
-    return matched > 0 && matched / sentences.length >= paragraphFraction;
+
+    const gate = matched > 0 && matched / sentences.length >= paragraphFraction;
+    if (!gate) return false;
+
+    // Redeeming qualities override the censor: spare the block when mean
+    // redeem evidence keeps up with mean censor evidence, weighted by mercy.
+    if (this.qualities.length > 0 && this.mercy > 0) {
+      const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+      const censorMean = mean(classifications.map((c) => Math.max(...c.scores)));
+      const redeemMean = mean(classifications.map((c) => c.redeem));
+      if (redeemMean >= this.mercy * censorMean) {
+        console.log(
+          `[LocalFilter] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
+        );
+        return false;
+      }
+    }
+
+    return true;
   }
 
   // Style a block per its verdict (fresh or cached).

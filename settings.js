@@ -8,51 +8,63 @@
 
 const $ = (id) => document.getElementById(id);
 
-// ---- Topics (options page) ----------------------------------------------
+// ---- Word lists (topics, redeeming qualities) ----------------------------
 
-async function loadTopics() {
-  const list = $("topicsList");
-  if (!list) return;
+function wireWordList({ listId, inputId, addId, storageKey }) {
+  const list = $(listId);
+  const input = $(inputId);
+  const addButton = $(addId);
+  if (!list || !input) return;
 
-  const { topics } = await getSettings();
-  list.innerHTML = "";
+  const load = async () => {
+    const { [storageKey]: items = [] } = await chrome.storage.sync.get(
+      storageKey,
+    );
+    list.innerHTML = "";
 
-  for (const topic of topics) {
-    const row = document.createElement("div");
-    row.className = "topic";
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.className = "topic";
 
-    const label = document.createElement("span");
-    label.textContent = topic;
+      const label = document.createElement("span");
+      label.textContent = item;
 
-    const remove = document.createElement("button");
-    remove.className = "ghost";
-    remove.textContent = "Remove";
-    remove.onclick = async () => {
-      const { topics: current } = await getSettings();
-      await chrome.storage.sync.set({
-        topics: current.filter((t) => t !== topic),
-      });
-      loadTopics();
-    };
+      const remove = document.createElement("button");
+      remove.className = "ghost";
+      remove.textContent = "Remove";
+      remove.onclick = async () => {
+        const { [storageKey]: current = [] } =
+          await chrome.storage.sync.get(storageKey);
+        await chrome.storage.sync.set({
+          [storageKey]: current.filter((t) => t !== item),
+        });
+        load();
+      };
 
-    row.append(label, remove);
-    list.append(row);
-  }
+      row.append(label, remove);
+      list.append(row);
+    }
+  };
+
+  const add = async () => {
+    const value = input.value.trim();
+    if (!value) return;
+    const { [storageKey]: current = [] } = await chrome.storage.sync.get(
+      storageKey,
+    );
+    await chrome.storage.sync.set({ [storageKey]: [...current, value] });
+    input.value = "";
+    load();
+  };
+
+  addButton?.addEventListener("click", add);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") add();
+  });
+  load();
 }
 
-async function addTopic() {
-  const input = $("newTopic");
-  if (!input) return;
-  const topic = input.value.trim();
-  if (!topic) return;
-
-  const { topics } = await getSettings();
-  await chrome.storage.sync.set({ topics: [...topics, topic] });
-  input.value = "";
-  loadTopics();
-}
-
-// ---- Censor mode, strictness, API key ------------------------------------
+// ---- Censor mode, strictness, mercy, API key -------------------------------
 
 function wireCensorMode() {
   const scoped = document.body.classList.contains("popup");
@@ -70,17 +82,15 @@ function wireCensorMode() {
   });
 }
 
-function wireStrictness() {
-  const slider = $("strictness");
+function wireSlider(id, labelId, labelFor, storageKey) {
+  const slider = $(id);
   if (!slider) return;
 
   slider.addEventListener("input", () => {
-    $("strictnessLabel").textContent = strictnessLabel(
-      parseFloat(slider.value),
-    );
+    $(labelId).textContent = labelFor(parseFloat(slider.value));
   });
   slider.addEventListener("change", () => {
-    chrome.storage.sync.set({ strictness: parseFloat(slider.value) });
+    chrome.storage.sync.set({ [storageKey]: parseFloat(slider.value) });
   });
 }
 
@@ -108,11 +118,12 @@ async function refreshKeyStatus() {
 }
 
 async function loadSettings() {
-  const scoped =
-    document.body.classList.contains("popup") && window.LF_SITE_ORIGIN;
+  const scoped = document.body.classList.contains("popup") &&
+    window.LF_SITE_ORIGIN;
+  const { censorMode, strictness, mercy } = await getSettings();
   const mode = scoped
     ? await getEffectiveCensorMode(window.LF_SITE_ORIGIN)
-    : (await getSettings()).censorMode;
+    : censorMode;
 
   const modeInput = document.querySelector(
     `#censorMode input[value="${mode}"]`,
@@ -121,9 +132,14 @@ async function loadSettings() {
 
   const slider = $("strictness");
   if (slider) {
-    const { strictness } = await getSettings();
     slider.value = strictness;
     $("strictnessLabel").textContent = strictnessLabel(strictness);
+  }
+
+  const mercySlider = $("mercy");
+  if (mercySlider) {
+    mercySlider.value = mercy;
+    $("mercyLabel").textContent = mercyLabel(mercy);
   }
 
   refreshKeyStatus();
@@ -132,14 +148,27 @@ async function loadSettings() {
 // ---- Init ----------------------------------------------------------------
 
 function initSettings() {
-  $("addTopic")?.addEventListener("click", addTopic);
-  $("newTopic")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") addTopic();
+  wireWordList({
+    listId: "topicsList",
+    inputId: "newTopic",
+    addId: "addTopic",
+    storageKey: "topics",
   });
+  wireWordList({
+    listId: "qualitiesList",
+    inputId: "newQuality",
+    addId: "addQuality",
+    storageKey: "qualities",
+  });
+  wireSlider(
+    "strictness",
+    "strictnessLabel",
+    strictnessLabel,
+    "strictness",
+  );
+  wireSlider("mercy", "mercyLabel", mercyLabel, "mercy");
   wireCensorMode();
-  wireStrictness();
   wireApiKey();
-  loadTopics();
   loadSettings();
 }
 

@@ -73,7 +73,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-async function classifyBatch({ sentences, topics }) {
+async function classifyBatch({ sentences, topics, qualities = [] }) {
   if (!Array.isArray(sentences) || sentences.length === 0) {
     throw new Error("Sentences must be a non-empty array");
   }
@@ -102,6 +102,12 @@ async function classifyBatch({ sentences, topics }) {
         criteria: null,
       };
     });
+    qualities.forEach((quality, k) => {
+      questions[`s${i}_q${k}`] = {
+        type: "noul",
+        instructions: {
+          question: `Does this sentence read as ${quality}?`,
+    });
   });
 
   const response = await fetchWithTimeout(JEV_ENDPOINT, {
@@ -127,19 +133,28 @@ async function classifyBatch({ sentences, topics }) {
   // Array aligned with the input sentences; content.js consumes by index.
   // Validate every answer so a shape mismatch fails loudly instead of
   // silently producing undefined scores.
+  // Every answer is validated so a shape mismatch fails loudly instead of
+  // silently producing undefined scores.
+  const answerFor = (key) => {
+    const answer = data.answers?.[key];
+    if (typeof answer?.noul !== "number" || !Number.isFinite(answer.noul)) {
+      throw new Error(
+        `Jev response missing answer ${key}: ${JSON.stringify(answer).slice(0, 200)}`,
+      );
+    }
+    return answer.noul;
+  };
+
+  // Array aligned with the input sentences; content.js consumes by index.
+  // redeem = strongest quality probability for the sentence (0 when no
+  // qualities are configured).
   return sentences.map((sentence, i) => ({
     sequence: sentence,
     labels: topics,
-    scores: topics.map((_, j) => {
-      const key = `s${i}_t${j}`;
-      const answer = data.answers?.[key];
-      if (typeof answer?.noul !== "number" || !Number.isFinite(answer.noul)) {
-        throw new Error(
-          `Jev response missing answer ${key}: ${JSON.stringify(answer).slice(0, 200)}`,
-        );
-      }
-      return answer.noul;
-    }),
+    scores: topics.map((_, j) => answerFor(`s${i}_t${j}`)),
+    redeem: qualities.length
+      ? Math.max(...qualities.map((_, k) => answerFor(`s${i}_q${k}`)))
+      : 0,
   }));
 }
 

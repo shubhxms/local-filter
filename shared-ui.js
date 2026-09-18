@@ -6,13 +6,28 @@ function strictnessLabel(value) {
   return "Restrictive";
 }
 
+function mercyLabel(value) {
+  if (value <= 0) return "Off";
+  if (value < 0.5) return "Rare";
+  if (value < 1) return "Balanced";
+  return "Merciful";
+}
+
 async function getSettings() {
   const {
     topics = [],
     strictness = 0.5,
     censorMode = "blur",
-  } = await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
-  return { topics, strictness, censorMode };
+    qualities = [],
+    mercy = 1,
+  } = await chrome.storage.sync.get([
+    "topics",
+    "strictness",
+    "censorMode",
+    "qualities",
+    "mercy",
+  ]);
+  return { topics, strictness, censorMode, qualities, mercy };
 }
 
 // Censor style resolution: a per-site override (lf-site:<origin> in
