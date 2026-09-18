@@ -1,83 +1,52 @@
 // Local Filter - Background Service Worker (MV3)
 // jev-api branch: classifies sentences via TypeSafe AI's Jev (System One) API.
-// Wire format verified against @typesafe-ai/sdk v0.6.0 (client.ts, questions.ts):
-// POST /v1/systemone { model, state, questions } -> { answers: { [name]: { type, noul } } }
+// One request per message: every sentence x topic becomes a named noul
+// question, answered in a single parallel pass.
 
 const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const JEV_MODEL = 'jev-latest';
-const CONCURRENCY = 5;   // sentences classified in parallel
-const MAX_SENTENCES = 50;
 
-// Listen for messages from content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'classifyText') {
-    console.log('[Background] Received classifyText request, routing to Jev');
-
-    handleClassification(message)
-      .then(result => {
-        chrome.tabs.sendMessage(sender.tab.id, {
-          action: 'classificationResults',
-          classifications: result
-        });
+chrome.runtime.onMessage.addListener((message, sendResponse) => {
+  if (message.action === 'classifySentences') {
+    classifyBatch(message)
+      .then(classifications => {
+        sendResponse({ success: true, requestId: message.requestId, classifications });
       })
       .catch(error => {
         console.error('[Background] Classification failed:', error);
-        chrome.tabs.sendMessage(sender.tab.id, {
-          action: 'classificationError',
-          error: error.message
-        });
+        sendResponse({ success: false, requestId: message.requestId, error: error.message });
       });
 
-    sendResponse({ success: true, message: 'Processing started' });
-    return true;
+    return true;  // async sendResponse
   }
 
   return false;
 });
 
-async function handleClassification(message) {
+async function classifyBatch({ sentences, topics }) {
+  if (!Array.isArray(sentences) || sentences.length === 0) {
+    throw new Error('Sentences must be a non-empty array');
+  }
+  if (!Array.isArray(topics) || topics.length === 0) {
+    throw new Error('Topics must be a non-empty array');
+  }
+
   const { jevApiKey: apiKey } = await chrome.storage.local.get('jevApiKey');
   if (!apiKey) {
     throw new Error('No Jev API key configured. Add one in the extension options.');
   }
 
-  const sentences = segmentSentences(message.text);
-  console.log(`[Background] Classifying ${sentences.length} sentences with ${message.topics.length} topics each`);
-
-  // One request per sentence; a worker pool keeps a few in flight at a time.
-  const outputs = {};
-  let cursor = 0;
-
-  const worker = async () => {
-    while (cursor < sentences.length) {
-      const i = cursor++;
-      try {
-        outputs[i] = await classifySentence(sentences[i], message.topics, apiKey);
-      } catch (sentenceError) {
-        console.error(`[Background] Error classifying sentence ${i}:`, sentenceError);
-        outputs[i] = { error: sentenceError.message, sequence: sentences[i] };
-      }
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, sentences.length) }, worker)
-  );
-
-  console.log('[Background] Classification complete');
-  return outputs;
-}
-
-// Ask Jev one noul question per topic — a 0..1 yes-probability each, which maps
-// straight onto the multi-label scores the content script already consumes.
-async function classifySentence(sentence, topics, apiKey) {
+  // Self-contained structured instructions bind each question to its sentence
+  // unambiguously; state carries the list for shared context.
   const questions = {};
-  topics.forEach((topic, j) => {
-    questions[`topic_${j}`] = {
-      type: 'noul',
-      instructions: `Is this sentence about ${topic}?`,
-      criteria: null
-    };
+  sentences.forEach((sentence, i) => {
+    topics.forEach((topic, j) => {
+      questions[`s${i}_t${j}`] = {
+        type: 'noul',
+        instructions: { question: `Is this sentence about ${topic}?`, sentence },
+        criteria: null
+      };
+    });
   });
 
   const response = await fetch(JEV_ENDPOINT, {
@@ -88,7 +57,7 @@ async function classifySentence(sentence, topics, apiKey) {
     },
     body: JSON.stringify({
       model: JEV_MODEL,
-      state: { sentence },
+      state: { sentences },
       questions
     })
   });
@@ -100,19 +69,12 @@ async function classifySentence(sentence, topics, apiKey) {
 
   const data = await response.json();
 
-  return {
+  // Array aligned with the input sentences; content.js consumes by index.
+  return sentences.map((sentence, i) => ({
     sequence: sentence,
     labels: topics,
-    scores: topics.map((_, j) => data.answers[`topic_${j}`].noul)
-  };
-}
-
-function segmentSentences(text) {
-  const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
-  const sentences = Array.from(segmenter.segment(text), s => s.segment.trim())
-    .filter(sentence => sentence.length > 10);
-
-  return sentences.slice(0, MAX_SENTENCES);
+    scores: topics.map((_, j) => data.answers[`s${i}_t${j}`].noul)
+  }));
 }
 
 console.log('[Background] Local Filter service worker loaded (jev-api)');
