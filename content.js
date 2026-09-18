@@ -14,10 +14,11 @@ const CONCURRENCY = 4; // blocks classified in parallel
 const SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
 let run = null;
+let filterSeq = 0; // guards against stacked FILTER clicks racing through startRun
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "FILTER") {
-    startRun();
+    startRun(++filterSeq);
   }
 });
 
@@ -30,9 +31,12 @@ function thresholdsFor(strictness) {
   };
 }
 
-async function startRun() {
+async function startRun(seq) {
   const { topics = [] } = await chrome.storage.sync.get("topics");
   const { strictness = 0.5 } = await chrome.storage.sync.get("strictness");
+
+  // Another FILTER arrived while we were reading storage — it wins.
+  if (seq !== filterSeq) return;
 
   if (topics.length === 0) {
     console.log(
@@ -64,10 +68,13 @@ class Run {
       this.blocks.set(el, { status: "queued" });
     }
 
-    this.queue.push(...this.blocks.keys());
+    // TEMPORARY debugging aid: cap the blast radius until the pipeline is stable.
+    const DEBUG_MAX_BLOCKS = 20;
+    const targets = [...this.blocks.keys()].slice(0, DEBUG_MAX_BLOCKS);
+    this.queue.push(...targets);
     this.errors = 0;
     console.log(
-      `[LocalFilter] Classifying ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
+      `[LocalFilter] Classifying ${targets.length}/${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
     );
     this.pump();
   }
@@ -123,7 +130,10 @@ class Run {
       this.apply(el, sentences, response.classifications);
     } catch (error) {
       this.errors++;
-      console.error("[LocalFilter] Classification failed:", error);
+  const hint = error.message.includes("message channel closed")
+    ? " (service worker died mid-request — see chrome://extensions → Local Filter → service worker console)"
+    : "";
+      console.error("[LocalFilter] Classification failed:", error.message + hint);
     } finally {
       const state = this.blocks.get(el);
       if (state) state.status = "done";

@@ -5,6 +5,24 @@
 
 const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL = "jev-latest";
+const FETCH_TIMEOUT_MS = 20000; // must stay under the SW 30s idle kill
+
+// A hanging fetch does NOT reset the service worker's idle timer, so without
+// a timeout the SW gets killed mid-request and the message channel closes.
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`Jev API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw new Error(`Jev API request failed: ${error.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 chrome.runtime.onMessage.addListener((message, sendResponse) => {
   if (message.action === "classifySentences") {
@@ -62,13 +80,17 @@ async function classifyBatch({ sentences, topics }) {
     });
   });
 
-  const response = await fetch(JEV_ENDPOINT, {
+  const response = await fetchWithTimeout(JEV_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: JEV_MODEL, state: { sentences }, questions }),
+    body: JSON.stringify({
+      model: JEV_MODEL,
+      state: { sentences },
+      questions,
+    }),
   });
 
   if (!response.ok) {
