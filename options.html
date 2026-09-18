@@ -30,6 +30,15 @@
     </section>
 
     <section>
+      <span class="field-label">Auto-censor on load — global default</span>
+      <div class="choices" id="autoFilter">
+        <label><input type="radio" name="auto" value="on"><span>On</span></label>
+        <label><input type="radio" name="auto" value="off"><span>Off</span></label>
+      </div>
+      <p class="hint">Re-filters previously filtered pages from cache on visit — never new API calls.</p>
+    </section>
+
+    <section>
       <span class="field-label">Strictness</span>
       <div class="slider-row">
         <input type="range" id="strictness" min="0" max="1" step="0.05" value="0.5">

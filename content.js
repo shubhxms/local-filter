@@ -60,6 +60,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             watching: run.blocks.size,
             classified: run.classified,
             censored: run.blurred,
+            topics: run.topicCounts,
           }
         : null,
     );
@@ -75,7 +76,7 @@ function thresholdsFor(strictness) {
   };
 }
 
-async function startRun(seq) {
+async function startRun(seq, { silent = false } = {}) {
   const {
     topics = [],
     strictness = 0.5,
@@ -101,11 +102,10 @@ async function startRun(seq) {
   currentMode = await effectiveMode();
   if (currentMode === "pixelate") ensurePixelateFilter();
 
-  // Per-page verdict cache, keyed by URL + topics + strictness, so
-  // re-filtering or revisiting a page costs no API calls.
-  // Per-page verdict cache, keyed by everything a verdict depends on,
-  // so re-filtering or revisiting a page costs no API calls.
-  const cacheKey = `lf:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}|${qualities.join(",")}|${mercy}`;
+  // Per-page verdict cache (lf2: values carry the dominant topic string
+  // for censored blocks, null otherwise), keyed by everything a verdict
+  // depends on, so re-filtering or revisiting a page costs no API calls.
+  const cacheKey = `lf2:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}|${qualities.join(",")}|${mercy}`;
   const stored = await chrome.storage.local.get(cacheKey);
 
   if (run) run.stop();
@@ -116,7 +116,10 @@ async function startRun(seq) {
     stored[cacheKey] ?? {},
     qualities,
     mercy,
+    silent,
   );
+  run.start();
+  if (!silent) showToast("Filtering…");
   run.start();
   showToast("Filtering…");
 }
@@ -129,13 +132,16 @@ class Run {
     cache = {},
     qualities = [],
     mercy = 1,
+    silent = false,
   ) {
     this.topics = topics;
     this.thresholds = thresholds;
     this.qualities = qualities; // redeeming qualities; empty = feature off
     this.mercy = mercy; // redeem weight: override when redeemMean >= mercy * censorMean
     this.cacheKey = cacheKey;
-    this.cache = cache; // text fingerprint -> censored (bool)
+    this.cache = cache; // text fingerprint -> dominant topic (string) | null
+    this.topicCounts = {}; // dominant topic -> censored block count
+    this.silent = silent;
     this.saveTimer = null;
     this.classified = 0;
     this.blurred = 0;
@@ -220,7 +226,7 @@ class Run {
       // Cached verdict for this exact text? Skip the API entirely.
       const fp = fingerprint(el.innerText.trim());
       if (Object.hasOwn(this.cache, fp)) {
-        this.finish(el, this.cache[fp]);
+        this.finish(el, typeof this.cache[fp] === "string" ? this.cache[fp] : null);
         return;
       }
 
@@ -244,10 +250,10 @@ class Run {
         );
       }
 
-      const censored = this.verdictFor(sentences, response.classifications);
-      this.cache[fp] = censored;
+      const verdict = this.verdictFor(sentences, response.classifications);
+      this.cache[fp] = verdict;
       this.scheduleSave();
-      this.finish(el, censored);
+      this.finish(el, verdict);
     } catch (error) {
       this.errors++;
       const hint = error.message.includes("message channel closed")
@@ -276,7 +282,7 @@ class Run {
     );
 
     const gate = matched > 0 && matched / sentences.length >= paragraphFraction;
-    if (!gate) return false;
+    if (!gate) return null;
 
     // Redeeming qualities override the censor: spare the block when mean
     // redeem evidence keeps up with mean censor evidence, weighted by mercy.
@@ -290,24 +296,39 @@ class Run {
         console.log(
           `[LocalCensor] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
         );
-        return false;
+        return null;
       }
     }
 
-    return true;
+    // Dominant topic: the topic behind the most matched sentences.
+    const counts = {};
+    for (const c of classifications) {
+      const j = c.scores.indexOf(Math.max(...c.scores));
+      if (c.scores[j] >= sentence) {
+        const topic = c.labels[j];
+        counts[topic] = (counts[topic] ?? 0) + 1;
+      }
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : null;
   }
 
   // Style a block per its verdict (fresh or cached).
-  finish(el, censored) {
+  // Style a block per its verdict (fresh or cached); the verdict is the
+  // dominant topic for censored blocks, null for clean/redeemed ones.
+  finish(el, verdict) {
     this.classified++;
 
-    if (censored) {
+    if (verdict !== null) {
       this.blurred++;
+      this.topicCounts[verdict] = (this.topicCounts[verdict] ?? 0) + 1;
       el.classList.add(MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur);
       censoredElements.add(el);
-      showToast(
-        `${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`,
-      );
+      if (!this.silent) {
+        showToast(
+          `${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`,
+        );
+      }
       console.log(
         `[LocalCensor] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
       );
@@ -357,7 +378,7 @@ function fingerprint(text) {
 // Keep only the 20 most recent pages of cached verdicts.
 async function pruneResultCache(keepKey) {
   const all = await chrome.storage.local.get(null);
-  const keys = Object.keys(all).filter((k) => k.startsWith("lf:"));
+  const keys = Object.keys(all).filter((k) => k.startsWith("lf:")); // covers lf: and lf2:
   const excess = keys.length - 20;
   if (excess <= 0) return;
   for (const key of keys.slice(0, excess)) {
@@ -452,5 +473,23 @@ function segment(text) {
 
   return sentences.slice(0, MAX_SENTENCES_PER_ELEMENT);
 }
+
+// Auto-censor on load: if the effective setting (per-site override beats
+// global) is on AND this page has cached verdicts, re-filter silently —
+// cache only, never a fresh API spend the user didn't ask for.
+(async () => {
+  const { autoFilter = false } = await chrome.storage.sync.get("autoFilter");
+  let auto = autoFilter;
+  const siteKey = `lf-auto:${location.origin}`;
+  const site = (await chrome.storage.local.get(siteKey))[siteKey];
+  if (typeof site === "boolean") auto = site;
+
+  if (!auto) return;
+
+  const all = await chrome.storage.local.get(null);
+  const pageKey = `lf2:${location.origin}${location.pathname}|`;
+  const hasVerdicts = Object.keys(all).some((k) => k.startsWith(pageKey));
+  if (hasVerdicts) startRun(++filterSeq, { silent: true });
+})();
 
 console.log("Local Censor content script loaded (element pipeline)");

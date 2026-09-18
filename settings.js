@@ -223,8 +223,53 @@ function initSettings() {
   wireSlider("strictness", "strictnessLabel", strictnessLabel, "strictness");
   wireSlider("mercy", "mercyLabel", mercyLabel, "mercy");
   wireCensorMode();
+  wireAutoFilter();
   wireApiKey();
   loadSettings();
+  loadAutoFilter();
+}
+
+// Auto-censor on load: popup writes the per-site override,
+// options writes the global default.
+function wireAutoFilter() {
+  const group = document.querySelectorAll("#autoFilter input");
+  if (group.length === 0) return;
+  const scoped = document.body.classList.contains("popup");
+
+  group.forEach((input) => {
+    input.addEventListener("change", async () => {
+      const value = input.value === "on";
+      if (scoped && window.LF_SITE_ORIGIN) {
+        await chrome.storage.local.set({
+          [`lf-auto:${window.LF_SITE_ORIGIN}`]: value,
+        });
+      } else {
+        await chrome.storage.sync.set({ autoFilter: value });
+      }
+    });
+  });
+}
+
+async function loadAutoFilter() {
+  if (document.querySelectorAll("#autoFilter input").length === 0) return;
+
+  let value;
+  const scoped = document.body.classList.contains("popup") &&
+    window.LF_SITE_ORIGIN;
+  if (scoped) {
+    const key = `lf-auto:${window.LF_SITE_ORIGIN}`;
+    const site = (await chrome.storage.local.get(key))[key];
+    value = typeof site === "boolean"
+      ? site
+      : (await chrome.storage.sync.get("autoFilter")).autoFilter ?? false;
+  } else {
+    value = (await chrome.storage.sync.get("autoFilter")).autoFilter ?? false;
+  }
+
+  const input = document.querySelector(
+    `#autoFilter input[value="${value ? "on" : "off"}"]`,
+  );
+  if (input) input.checked = true;
 }
 
 // The options page boots itself; the popup resolves the current tab's
