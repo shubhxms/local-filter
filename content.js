@@ -76,10 +76,10 @@ function thresholdsFor(strictness) {
 }
 
 async function startRun(seq) {
-  const {
-    topics = [],
-    strictness = 0.5,
-  } = await chrome.storage.sync.get(["topics", "strictness"]);
+  const { topics = [], strictness = 0.5 } = await chrome.storage.sync.get([
+    "topics",
+    "strictness",
+  ]);
 
   // Another FILTER arrived while we were reading storage — it wins.
   if (seq !== filterSeq) return;

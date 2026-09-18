@@ -7,8 +7,11 @@ function strictnessLabel(value) {
 }
 
 async function getSettings() {
-  const { topics = [], strictness = 0.5, censorMode = "blur" } =
-    await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
+  const {
+    topics = [],
+    strictness = 0.5,
+    censorMode = "blur",
+  } = await chrome.storage.sync.get(["topics", "strictness", "censorMode"]);
   return { topics, strictness, censorMode };
 }
 

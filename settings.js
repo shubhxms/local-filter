@@ -108,8 +108,8 @@ async function refreshKeyStatus() {
 }
 
 async function loadSettings() {
-  const scoped = document.body.classList.contains("popup") &&
-    window.LF_SITE_ORIGIN;
+  const scoped =
+    document.body.classList.contains("popup") && window.LF_SITE_ORIGIN;
   const mode = scoped
     ? await getEffectiveCensorMode(window.LF_SITE_ORIGIN)
     : (await getSettings()).censorMode;
