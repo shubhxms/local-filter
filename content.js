@@ -297,9 +297,17 @@ function isVisible(el) {
 }
 
 function segment(text) {
-  return Array.from(SEGMENTER.segment(text), (s) => s.segment.trim())
+  const trimmed = text.trim();
+  const sentences = Array.from(SEGMENTER.segment(trimmed), (s) => s.segment.trim())
     .filter((s) => s.length > 10)
-    .slice(0, MAX_SENTENCES_PER_ELEMENT);
+
+  // Short standalone text — headings, list items — has no long sentences,
+  // but it is still worth classifying as a single unit.
+  if (sentences.length === 0 && trimmed.length >= 3) {
+    return [trimmed];
+  }
+
+  return sentences.slice(0, MAX_SENTENCES_PER_ELEMENT);
 }
 
 console.log("Local Filter content script loaded (element pipeline)");
