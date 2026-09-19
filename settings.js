@@ -57,7 +57,7 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
       const row = document.createElement("div");
       row.className = "topic";
 
-      label.textContent = item;
+      const label = document.createElement("span");
       label.className = "value";
       label.textContent = item;
       label.title = "Click to edit";
