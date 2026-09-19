@@ -91,6 +91,11 @@ function wireWordList({ listId, inputId, addId, storageKey }) {
     if (!value) return;
     const { [storageKey]: current = [] } =
       await chrome.storage.sync.get(storageKey);
+    if (current.includes(value)) {
+      input.value = ""; // already present — nothing to add
+      load();
+      return;
+    }
     await chrome.storage.sync.set({ [storageKey]: [...current, value] });
     input.value = "";
     load();
