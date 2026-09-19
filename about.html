@@ -19,40 +19,45 @@
     <p class="subtitle">Censor what you'd rather not read.</p>
 
     <section>
-      <span class="field-label">What it does</span>
+      <span class="field-label">Features</span>
       <p class="prose">
-        Local Filter decides block by block whether it's about the topics you'd
-        rather avoid, and censors what matches.
-        Blocks carrying your redeeming qualities are spared.
-        100% local version coming soon.
+        Add topics you want to avoid, and redeeming topics that save them.
+        Every (sentence, topic) pair is sent to Jev's noul API, and a
+        weighted sum decides.
+      </p>
+      <p class="prose">
+        In short: focus on what you want to see more of.
       </p>
     </section>
 
     <section>
-      <span class="field-label">How it decides</span>
+      <span class="field-label">Why Jev</span>
       <p class="prose">
-        Each block's sentences are scored against your topics in a single
-        pass by <a href="https://typesafe.ai/">Jev — TypeSafe AI's</a> model.
-        A block is censored when enough of its sentences match; it is
-        redeemed when there is enough redeeming quality.
-        Verdicts are cached per page.
+        The initial idea was to use a 100% local model (such as
+        <a href="https://huggingface.co/Xenova/distilbert-base-cased">Xenova/DistilBERT</a>)
+        — but that was too slow and clunky to set up in an extension.
+      </p>
+      <p class="prose">
+        After Jev's launch I thought this was a perfect fit: a good,
+        general-purpose classifier that can zero-shot topics.
       </p>
     </section>
 
     <section>
-      <span class="field-label">Keyboard</span>
+      <span class="field-label">What's next</span>
       <p class="prose">
-        <kbd>⌘⌃B</kbd> filters the current page. Every control in the popup
-        and this page is reachable by <kbd>Tab</kbd>; list entries can be
-        edited by clicking or focusing them and pressing <kbd>Enter</kbd>.
+        I am looking at open, local alternatives that are blazing fast —
+        even (especially) on a CPU. Feel free to reach out to talk about
+        that. :)
       </p>
     </section>
 
     <section>
       <span class="field-label">Colophon</span>
       <p class="prose">
-        Version 1.0. Source on <a href="https://github.com/shubhxms/local-filter">GitHub</a>.
-        The mark is three redaction bars. Classification by Jev.
+        Version 1.0. Source on
+        <a href="https://github.com/shubhxms/local-filter">GitHub</a>.
+        The mark is three redaction bars.
       </p>
     </section>
   </main>
