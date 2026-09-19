@@ -6,7 +6,7 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "name": "Local Censor",
+  "name": "Local Filter",
   "version": "1.0",
   "description": "Censor what you'd rather not read — decided locally, classified by Jev.",
   "permissions": ["storage", "activeTab"],

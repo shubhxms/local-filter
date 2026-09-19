@@ -1,4 +1,4 @@
-// Local Censor — Content Script
+// Local Filter — Content Script
 // Element-level extraction + scroll-driven classification: blocks enter the
 // queue via IntersectionObserver a few scroll units before they appear.
 // Sentences are the measurement unit (Jev scores them); block elements are
@@ -95,7 +95,7 @@ async function startRun(seq, { silent = false } = {}) {
 
   if (topics.length === 0) {
     console.log(
-      "[LocalCensor] No topics configured. Add topics in the extension options.",
+      "[LocalFilter] No topics configured. Add topics in the extension options.",
     );
     return;
   }
@@ -174,7 +174,7 @@ class Run {
     for (const el of this.blocks.keys()) this.observer.observe(el);
     this.errors = 0;
     console.log(
-      `[LocalCensor] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
+      `[LocalFilter] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
     );
   }
 
@@ -206,7 +206,7 @@ class Run {
         this.inFlight--;
         if (!this.stopped && this.queue.length === 0 && this.inFlight === 0) {
           console.log(
-            `[LocalCensor] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
+            `[LocalFilter] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
           );
           clearTimeout(this.saveTimer);
           this.save();
@@ -249,7 +249,7 @@ class Run {
 
       if (this.classified === 0) {
         console.log(
-          "[LocalCensor] First block sample:",
+          "[LocalFilter] First block sample:",
           JSON.stringify(response.classifications).slice(0, 300),
         );
       }
@@ -264,7 +264,7 @@ class Run {
         ? " (service worker died mid-request — see chrome://extensions → Local Filter → service worker console)"
         : "";
       console.error(
-        "[LocalCensor] Classification failed:",
+        "[LocalFilter] Classification failed:",
         error.message + hint,
       );
     } finally {
@@ -282,7 +282,7 @@ class Run {
     const best = Math.max(...classifications.flatMap((c) => c.scores));
 
     console.log(
-      `[LocalCensor] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
+      `[LocalFilter] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
     );
 
     const gate = matched > 0 && matched / sentences.length >= paragraphFraction;
@@ -298,7 +298,7 @@ class Run {
       const redeemMean = mean(classifications.map((c) => c.redeem));
       if (redeemMean >= this.mercy * censorMean) {
         console.log(
-          `[LocalCensor] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
+          `[LocalFilter] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
         );
         return null;
       }
@@ -334,13 +334,13 @@ class Run {
         );
       }
       console.log(
-        `[LocalCensor] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
+        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
       );
     }
 
     if (this.classified % 25 === 0) {
       console.log(
-        `[LocalCensor] Progress: ${this.classified} classified, ${this.blurred} censored`,
+        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} censored`,
       );
     }
   }
@@ -356,7 +356,7 @@ class Run {
       await chrome.storage.local.set({ [this.cacheKey]: this.cache });
       await pruneResultCache(this.cacheKey);
     } catch (error) {
-      console.error("[LocalCensor] Failed to save page results:", error);
+      console.error("[LocalFilter] Failed to save page results:", error);
     }
   }
 }
@@ -525,4 +525,4 @@ function segment(text) {
   if (hasVerdicts) startRun(++filterSeq, { silent: true });
 })();
 
-console.log("Local Censor content script loaded (element pipeline)");
+console.log("Local Filter content script loaded (element pipeline)");

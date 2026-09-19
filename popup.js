@@ -37,9 +37,16 @@
     setTimeout(() => (button.textContent = "Set as global"), 1500);
   });
 
+  // Show the live binding; if Chrome never bound the suggested key (a known
+  // unpacked-extension quirk), show the default so it's still discoverable.
   chrome.commands.getAll().then(([command]) => {
+    const hint = $("shortcutHint");
     if (command?.shortcut) {
-      $("shortcutHint").textContent = command.shortcut;
+      hint.textContent = command.shortcut;
+    } else {
+      const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+      hint.textContent = isMac ? "⌘⌃B" : "Ctrl+Shift+B";
+      hint.title = "Default — set it in chrome://extensions/shortcuts";
     }
   });
 

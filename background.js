@@ -1,4 +1,4 @@
-// Local Censor — Background Service Worker (MV3)
+// Local Filter — Background Service Worker (MV3)
 // jev-api branch: classifies sentences via TypeSafe AI's Jev (System One) API.
 // One request per message: every sentence x topic becomes a named noul
 // question, answered in a single parallel pass.
@@ -162,4 +162,4 @@ async function classifyBatch({ sentences, topics, qualities = [] }) {
   }));
 }
 
-console.log("[Background] Local Censor service worker loaded (jev-api)");
+console.log("[Background] Local Filter service worker loaded (jev-api)");
