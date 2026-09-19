@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "name": "Local Filter",
   "version": "1.0",
-  "description": "A local semantic filter using zero-shot classification!",
-  "permissions": ["storage", "activeTab", "offscreen"],
-  "host_permissions": ["https://*/", "http://*/"],
+  "description": "Censor what you'd rather not read — decided locally, classified by Jev.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://api.typesafe.ai/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -12,7 +18,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["/libs/mark.min.js", "content.js"],
+      "js": ["content.js"],
       "css": ["styles.css"]
     }
   ],
@@ -20,9 +26,23 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
   },
   "action": {
-    "default_popup": "/popup/popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
   },
-  "options_page": "options/options.html",
+  "commands": {
+    "run-filter": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Ctrl+B"
+      },
+      "description": "Filter the current page"
+    }
+  },
+  "options_page": "options.html",
   "web_accessible_resources": [
     {
       "resources": ["libs/*"],

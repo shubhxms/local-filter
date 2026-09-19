@@ -1,148 +1,528 @@
-// Local Filter - Content Script
-// Handles text extraction and highlighting
+// Local Filter — Content Script
+// Element-level extraction + scroll-driven classification: blocks enter the
+// queue via IntersectionObserver a few scroll units before they appear.
+// Sentences are the measurement unit (Jev scores them); block elements are
+// the action unit (the whole block blurs when enough of its sentences agree).
 
-let userTopics = [];
-let isProcessing = false;
+const BLOCK_SELECTOR =
+  "p, h1, h2, h3, h4, h5, h6, li, blockquote, figcaption, td, th, dd, dt, pre";
+// NOTE: header/aside are deliberately NOT skipped — page H1s and section
+// headings often live inside them; site chrome is covered by nav/footer.
+const SKIP_ANCESTORS = 'nav, footer, [aria-hidden="true"]';
+// Censor style applied to matched blocks; keys match storage.censorMode.
+const MODE_CLASSES = {
+  blur: "local-filter-blur",
+  black: "local-filter-black",
+  pixelate: "local-filter-pixelate",
+  redacted: "local-filter-redacted",
+  hide: "local-filter-hide",
+};
+const MAX_SENTENCES_PER_ELEMENT = 20; // sanity cap for pathological blocks
+const CONCURRENCY = 4; // blocks classified in parallel
+const OBSERVER_MARGIN = "50% 0px 250% 0px"; // classify a few scroll units ahead
 
-// Listen for messages from popup and background
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Content script received message:', message);
+const SEGMENTER = new Intl.Segmenter("en", { granularity: "sentence" });
 
-  // Handle the FILTER command from popup
-  if (message.type === 'FILTER') {
-    userTopics = message.topics || [];
-    console.log('Received topics:', userTopics);
+let run = null;
+let filterSeq = 0; // guards against stacked FILTER clicks racing through startRun
+let currentMode = "blur"; // live censor mode; updated by storage changes too
+const censoredElements = new Set(); // already-censored blocks, for instant restyling
 
-    if (userTopics.length === 0) {
-      console.log('No topics configured. Please add topics in the extension options.');
-      sendResponse({ success: false, error: 'No topics configured' });
-      return;
-    }
+// Switching censor mode restyles already-censored blocks instantly — no
+// re-classification. (Registered before the message listener; keep it
+// top-level so range edits to the listener cannot clobber it again.)
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  const siteKey = `lf-site:${location.origin}`;
+  const relevant =
+    (area === "sync" && changes.censorMode) ||
+    (area === "local" && changes[siteKey]);
+  if (!relevant) return;
 
-    processPage();
-    sendResponse({ success: true });
-    return true;
-  }
-
-  // Handle classification results from background script
-  if (message.action === 'classificationResults') {
-    console.log('Received classification results');
-    const classifications = message.classifications;
-    if (classifications) {
-      markText(classifications);
-    } else {
-      console.error('Received empty classification results');
-    }
-    isProcessing = false;
-    return;
-  }
-
-  // Handle classification errors from background script
-  if (message.action === 'classificationError') {
-    console.error('Classification error:', message.error);
-    isProcessing = false;
-    return;
+  currentMode = await effectiveMode();
+  if (currentMode === "pixelate") ensurePixelateFilter();
+  const cls = MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur;
+  for (const el of censoredElements) {
+    el.classList.remove(...Object.values(MODE_CLASSES));
+    el.classList.add(cls);
   }
 });
 
-async function processPage() {
-  if (isProcessing) {
-    console.log('Already processing, please wait...');
-    return;
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "FILTER") {
+    showAck();
+    startRun(++filterSeq);
   }
 
-  if (userTopics.length === 0) {
-    console.log('No topics to filter. Skipping classification.');
-    return;
+  // Popup asks for the current page's numbers.
+  if (message.type === "GET_STATS") {
+    sendResponse(
+      run
+        ? {
+            watching: run.blocks.size,
+            classified: run.classified,
+            censored: run.blurred,
+            topics: run.topicCounts,
+          }
+        : null,
+    );
   }
+});
 
-  isProcessing = true;
-  console.log('Starting page processing...');
-
-  // Extract all text from the page
-  const text = document.body.innerText;
-
-  console.log(`Sending text for classification with topics: ${userTopics.join(', ')}`);
-
-  // Send to background script for classification
-  chrome.runtime.sendMessage({
-    action: 'classifyText',
-    text: text,
-    topics: userTopics
-  }, response => {
-    if (response && response.success) {
-      console.log('Classification request sent successfully');
-    } else {
-      console.error('Failed to send classification request:', response?.error || 'Unknown error');
-      isProcessing = false;
-    }
-  });
+// One user knob: 0 = permissive (blur only near-certain blocks),
+// 1 = restrictive (blur aggressively). Keep in sync with options.js.
+function thresholdsFor(strictness) {
+  return {
+    sentence: 0.75 - 0.5 * strictness, // 0.75 → 0.25; default 0.5 → 0.50 (matches the old fixed threshold)
+    paragraphFraction: 0.8 - 0.4 * strictness, // 0.80 → 0.40; default 0.5 → 0.60
+  };
 }
 
-function markText(outputs) {
-  const instance = new Mark(document.querySelector('body'));
+async function startRun(seq, { silent = false } = {}) {
+  const {
+    topics = [],
+    strictness = 0.5,
+    qualities = [],
+    mercy = 1,
+  } = await chrome.storage.sync.get([
+    "topics",
+    "strictness",
+    "qualities",
+    "mercy",
+  ]);
 
-  // Remove existing highlights first
-  instance.unmark({
-    className: 'local-filter-highlight',
-    done: function () {
-      applyHighlights(instance, outputs);
-    }
-  });
-}
+  // Another FILTER arrived while we were reading storage — it wins.
+  if (seq !== filterSeq) return;
 
-function applyHighlights(instance, outputs) {
-  // Collect sentences that match any topic above threshold
-  let toHighlight = [];
-  const THRESHOLD = 0.5; // Confidence threshold
-
-  for (const [key, value] of Object.entries(outputs)) {
-    // Skip error entries
-    if (value.error) {
-      console.log(`Skipping entry ${key} due to error:`, value.error);
-      continue;
-    }
-
-    // Check if any score is above threshold
-    if (value.scores && value.scores.some(score => score > THRESHOLD)) {
-      // The 'sequence' is the original sentence text
-      if (value.sequence) {
-        // Find which topic matched
-        const maxScoreIndex = value.scores.indexOf(Math.max(...value.scores));
-        const matchedTopic = value.labels ? value.labels[maxScoreIndex] : 'unknown';
-        const maxScore = value.scores[maxScoreIndex];
-
-        console.log(`Match found: "${value.sequence.substring(0, 50)}..." matches "${matchedTopic}" with score ${maxScore.toFixed(2)}`);
-        toHighlight.push(value.sequence);
-      }
-    }
-  }
-
-  console.log(`Found ${toHighlight.length} sentences to highlight out of ${Object.keys(outputs).length} processed`);
-
-  if (toHighlight.length === 0) {
-    console.log('No matches found above threshold.');
+  if (topics.length === 0) {
+    console.log(
+      "[LocalFilter] No topics configured. Add topics in the extension options.",
+    );
     return;
   }
 
-  // Highlight each matching sentence
-  toHighlight.forEach((sentence, index) => {
-    // Clean up the sentence for better matching
-    const cleanSentence = sentence.trim();
+  currentMode = await effectiveMode();
+  if (currentMode === "pixelate") ensurePixelateFilter();
 
-    instance.mark(cleanSentence, {
-      accuracy: "partially",
-      separateWordSearch: false,
-      caseSensitive: false,
-      className: "local-filter-highlight",
-      acrossElements: true,
-      done: function (count) {
-        if (count > 0) {
-          console.log(`Highlighted sentence ${index + 1}: ${count} occurrence(s)`);
+  // Per-page verdict cache (lf2: values carry the dominant topic string
+  // for censored blocks, null otherwise), keyed by everything a verdict
+  // depends on, so re-filtering or revisiting a page costs no API calls.
+  const cacheKey = `lf2:${location.origin}${location.pathname}|${topics.join(",")}|${strictness}|${qualities.join(",")}|${mercy}`;
+  const stored = await chrome.storage.local.get(cacheKey);
+
+  if (run) run.stop();
+  run = new Run(
+    topics,
+    thresholdsFor(strictness),
+    cacheKey,
+    stored[cacheKey] ?? {},
+    qualities,
+    mercy,
+    silent,
+  );
+  run.start();
+  if (!silent) showToast("Filtering…");
+  run.start();
+  showToast("Filtering…");
+}
+
+class Run {
+  constructor(
+    topics,
+    thresholds,
+    cacheKey,
+    cache = {},
+    qualities = [],
+    mercy = 1,
+    silent = false,
+  ) {
+    this.topics = topics;
+    this.thresholds = thresholds;
+    this.qualities = qualities; // redeeming qualities; empty = feature off
+    this.mercy = mercy; // redeem weight: override when redeemMean >= mercy * censorMean
+    this.cacheKey = cacheKey;
+    this.cache = cache; // text fingerprint -> dominant topic (string) | null
+    this.topicCounts = {}; // dominant topic -> censored block count
+    this.silent = silent;
+    this.saveTimer = null;
+    this.classified = 0;
+    this.blurred = 0;
+    this.id = crypto.randomUUID();
+    this.blocks = new Map(); // Element -> { status: 'queued' | 'inflight' | 'done' }
+    this.queue = [];
+    this.inFlight = 0;
+    this.observer = null;
+    this.stopped = false;
+  }
+
+  start() {
+    for (const el of collectBlocks()) {
+      this.blocks.set(el, { status: "queued" });
+    }
+
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          this.observer.unobserve(entry.target);
+          this.queue.push(entry.target);
+          this.pump();
         }
+      },
+      { rootMargin: OBSERVER_MARGIN },
+    );
+
+    for (const el of this.blocks.keys()) this.observer.observe(el);
+    this.errors = 0;
+    console.log(
+      `[LocalFilter] Watching ${this.blocks.size} blocks (run ${this.id.slice(0, 8)})`,
+    );
+  }
+
+  stop() {
+    this.stopped = true;
+    clearTimeout(this.saveTimer);
+    this.observer?.disconnect();
+    this.queue = [];
+    for (const el of this.blocks.keys()) {
+      censoredElements.delete(el);
+      el.classList.remove(...Object.values(MODE_CLASSES));
+    }
+  }
+
+  // Keep at most CONCURRENCY requests to the background in flight.
+  pump() {
+    while (
+      !this.stopped &&
+      this.inFlight < CONCURRENCY &&
+      this.queue.length > 0
+    ) {
+      const el = this.queue.shift();
+      const state = this.blocks.get(el);
+      if (!state || state.status !== "queued") continue;
+
+      state.status = "inflight";
+      this.inFlight++;
+      this.classify(el).finally(() => {
+        this.inFlight--;
+        if (!this.stopped && this.queue.length === 0 && this.inFlight === 0) {
+          console.log(
+            `[LocalFilter] Queue drained: ${this.classified} classified, ${this.blurred} blurred, ${this.errors} errors`,
+          );
+          clearTimeout(this.saveTimer);
+          this.save();
+          if (this.blurred === 0 && this.errors === 0) {
+            showToast("Nothing matched");
+          }
+        }
+        this.pump();
+      });
+    }
+  }
+
+  async classify(el) {
+    try {
+      const sentences = segment(el.innerText);
+      if (sentences.length === 0) return;
+
+      // Cached verdict for this exact text? Skip the API entirely.
+      const fp = fingerprint(el.innerText.trim());
+      if (Object.hasOwn(this.cache, fp)) {
+        this.finish(
+          el,
+          typeof this.cache[fp] === "string" ? this.cache[fp] : null,
+        );
+        return;
       }
-    });
-  });
+
+      const response = await chrome.runtime.sendMessage({
+        action: "classifySentences",
+        requestId: this.id,
+        sentences,
+        topics: this.topics,
+        qualities: this.qualities,
+      });
+
+      // A newer FILTER started meanwhile — drop stale results.
+      if (this.stopped || response?.requestId !== this.id) return;
+      if (!response?.success)
+        throw new Error(response?.error || "No response from background");
+
+      if (this.classified === 0) {
+        console.log(
+          "[LocalFilter] First block sample:",
+          JSON.stringify(response.classifications).slice(0, 300),
+        );
+      }
+
+      const verdict = this.verdictFor(sentences, response.classifications);
+      this.cache[fp] = verdict;
+      this.scheduleSave();
+      this.finish(el, verdict);
+    } catch (error) {
+      this.errors++;
+      const hint = error.message.includes("message channel closed")
+        ? " (service worker died mid-request — see chrome://extensions → Local Filter → service worker console)"
+        : "";
+      console.error(
+        "[LocalFilter] Classification failed:",
+        error.message + hint,
+      );
+    } finally {
+      const state = this.blocks.get(el);
+      if (state) state.status = "done";
+    }
+  }
+
+  // Fresh result: threshold + agreement gate decide the verdict.
+  verdictFor(sentences, classifications) {
+    const { sentence, paragraphFraction } = this.thresholds;
+    const matched = classifications.filter((c) =>
+      c.scores.some((score) => score >= sentence),
+    ).length;
+    const best = Math.max(...classifications.flatMap((c) => c.scores));
+
+    console.log(
+      `[LocalFilter] block ${matched}/${sentences.length} matched, best score ${best.toFixed(2)} (threshold ${sentence.toFixed(2)})`,
+    );
+
+    const gate = matched > 0 && matched / sentences.length >= paragraphFraction;
+    if (!gate) return null;
+
+    // Redeeming qualities override the censor: spare the block when mean
+    // redeem evidence keeps up with mean censor evidence, weighted by mercy.
+    if (this.qualities.length > 0 && this.mercy > 0) {
+      const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+      const censorMean = mean(
+        classifications.map((c) => Math.max(...c.scores)),
+      );
+      const redeemMean = mean(classifications.map((c) => c.redeem));
+      if (redeemMean >= this.mercy * censorMean) {
+        console.log(
+          `[LocalFilter] Redeemed block (redeem ${redeemMean.toFixed(2)} ≥ mercy × censor ${(this.mercy * censorMean).toFixed(2)})`,
+        );
+        return null;
+      }
+    }
+
+    // Dominant topic: the topic behind the most matched sentences.
+    const counts = {};
+    for (const c of classifications) {
+      const j = c.scores.indexOf(Math.max(...c.scores));
+      if (c.scores[j] >= sentence) {
+        const topic = c.labels[j];
+        counts[topic] = (counts[topic] ?? 0) + 1;
+      }
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : null;
+  }
+
+  // Style a block per its verdict (fresh or cached).
+  // Style a block per its verdict (fresh or cached); the verdict is the
+  // dominant topic for censored blocks, null for clean/redeemed ones.
+  finish(el, verdict) {
+    this.classified++;
+
+    if (verdict !== null) {
+      this.blurred++;
+      this.topicCounts[verdict] = (this.topicCounts[verdict] ?? 0) + 1;
+      el.classList.add(MODE_CLASSES[currentMode] ?? MODE_CLASSES.blur);
+      censoredElements.add(el);
+      if (!this.silent) {
+        showToast(
+          `${this.blurred} ${this.blurred === 1 ? "block" : "blocks"} censored`,
+        );
+      }
+      console.log(
+        `[LocalFilter] Censored <${el.tagName.toLowerCase()}> (${currentMode})`,
+      );
+    }
+
+    if (this.classified % 25 === 0) {
+      console.log(
+        `[LocalFilter] Progress: ${this.classified} classified, ${this.blurred} censored`,
+      );
+    }
+  }
+
+  scheduleSave() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.save(), 1000);
+  }
+
+  async save() {
+    if (this.stopped) return;
+    try {
+      await chrome.storage.local.set({ [this.cacheKey]: this.cache });
+      await pruneResultCache(this.cacheKey);
+    } catch (error) {
+      console.error("[LocalFilter] Failed to save page results:", error);
+    }
+  }
 }
 
-console.log('Local Filter content script loaded');
+// Censor style: per-site override wins over the global default.
+async function effectiveMode() {
+  const key = `lf-site:${location.origin}`;
+  const site = (await chrome.storage.local.get(key))[key];
+  if (site) return site;
+  const { censorMode = "blur" } = await chrome.storage.sync.get("censorMode");
+  return censorMode;
+}
+
+// djb2 — cheap, stable fingerprint of block text.
+function fingerprint(text) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) {
+    h = (h * 33 + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+// Keep only the 20 most recent pages of cached verdicts.
+async function pruneResultCache(keepKey) {
+  const all = await chrome.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith("lf:")); // covers lf: and lf2:
+  const excess = keys.length - 20;
+  if (excess <= 0) return;
+  for (const key of keys.slice(0, excess)) {
+    if (key !== keepKey) await chrome.storage.local.remove(key);
+  }
+}
+
+function collectBlocks() {
+  const blocks = [];
+  for (const el of document.querySelectorAll(BLOCK_SELECTOR)) {
+    if (el.closest(SKIP_ANCESTORS)) continue; // nav/footer boilerplate
+    if (el.querySelector(BLOCK_SELECTOR)) continue; // innermost block wins (li > p)
+    if (!isVisible(el)) continue;
+    if (segment(el.innerText).length === 0) continue; // nothing worth classifying
+    blocks.push(el);
+  }
+  return blocks;
+}
+
+// The pixelate mode needs an SVG filter def in the page; inject it once, lazily.
+// Small serif toast, bottom-right — acknowledges every filter run.
+// Copying a selection that includes censored content answers with
+// [REDACTED] in its place; clean text in the same selection survives.
+const CENSORED_SELECTOR =
+  ".local-filter-blur, .local-filter-black, .local-filter-pixelate, .local-filter-redacted";
+
+document.addEventListener("copy", (event) => {
+  const selection = document.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+  // Entirely inside one censored block: the whole copy is the token.
+  const root = selection.getRangeAt(0).commonAncestorContainer;
+  const rootEl = root.nodeType === 1 ? root : root.parentElement;
+  if (rootEl?.closest?.(CENSORED_SELECTOR)) {
+    event.clipboardData.setData("text/plain", "[REDACTED]");
+    event.preventDefault();
+    return;
+  }
+
+  // Mixed selection: swap censored fragments for the token, keep the rest.
+  const holder = document.createElement("div");
+  holder.appendChild(selection.getRangeAt(0).cloneContents());
+  const censoredBits = holder.querySelectorAll(CENSORED_SELECTOR);
+  if (censoredBits.length === 0) return; // clean copy — default behavior
+
+  for (const el of censoredBits) el.replaceWith("[REDACTED]");
+  event.clipboardData.setData("text/plain", holder.textContent);
+  event.preventDefault();
+});
+
+let toastEl = null;
+let toastTimer = null;
+// macOS-passkey-style acknowledgment: a square springs in and a check
+// draws itself inside. Runs on every FILTER — shortcut or button.
+let ackEl = null;
+let ackTimer = null;
+function showAck() {
+  ackEl?.remove();
+  clearTimeout(ackTimer);
+  ackEl = document.createElement("div");
+  ackEl.className = "local-filter-ack";
+  ackEl.innerHTML =
+    '<div class="box"><svg viewBox="0 0 64 64" aria-hidden="true">' +
+    '<rect x="14" y="21" width="36" height="6" rx="3"/>' +
+    '<rect x="14" y="29" width="27" height="6" rx="3"/>' +
+    '<rect x="14" y="37" width="32" height="6" rx="3"/>' +
+    "</svg></div>";
+  document.body.appendChild(ackEl);
+  ackTimer = setTimeout(() => {
+    ackEl?.remove();
+    ackEl = null;
+  }, 1200);
+}
+
+function showToast(text) {
+  if (!toastEl) {
+    toastEl = document.createElement("div");
+    toastEl.className = "local-filter-toast";
+    document.body.appendChild(toastEl);
+  }
+  toastEl.textContent = text;
+  toastEl.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl?.classList.remove("visible"), 2500);
+}
+
+function ensurePixelateFilter() {
+  if (document.getElementById("local-filter-pixelate")) return;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "0");
+  svg.setAttribute("height", "0");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.position = "absolute";
+  svg.innerHTML =
+    '<filter id="local-filter-pixelate">' +
+    '<feFlood x="4" y="4" height="2" width="2"/>' +
+    '<feComposite width="10" height="10"/>' +
+    '<feTile result="a"/>' +
+    '<feComposite in="SourceGraphic" in2="a" operator="in"/>' +
+    '<feMorphology operator="dilate" radius="5"/>' +
+    "</filter>";
+  document.body.appendChild(svg);
+}
+
+function isVisible(el) {
+  if (getComputedStyle(el).position === "fixed") return true;
+  return el.offsetParent !== null;
+}
+
+function segment(text) {
+  const trimmed = text.trim();
+  const sentences = Array.from(SEGMENTER.segment(trimmed), (s) =>
+    s.segment.trim(),
+  ).filter((s) => s.length > 10);
+
+  // Short standalone text — headings, list items — has no long sentences,
+  // but it is still worth classifying as a single unit.
+  if (sentences.length === 0 && trimmed.length >= 3) {
+    return [trimmed];
+  }
+
+  return sentences.slice(0, MAX_SENTENCES_PER_ELEMENT);
+}
+
+// Auto-censor on load: if the effective setting (per-site override beats
+// global) is on AND this page has cached verdicts, re-filter silently —
+// cache only, never a fresh API spend the user didn't ask for.
+(async () => {
+  const { autoFilter = false } = await chrome.storage.sync.get("autoFilter");
+  let auto = autoFilter;
+  const siteKey = `lf-auto:${location.origin}`;
+  const site = (await chrome.storage.local.get(siteKey))[siteKey];
+  if (typeof site === "boolean") auto = site;
+
+  if (!auto) return;
+
+  const all = await chrome.storage.local.get(null);
+  const pageKey = `lf2:${location.origin}${location.pathname}|`;
+  const hasVerdicts = Object.keys(all).some((k) => k.startsWith(pageKey));
+  if (hasVerdicts) startRun(++filterSeq, { silent: true });
+})();
+
+console.log("Local Filter content script loaded (element pipeline)");

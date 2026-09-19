@@ -1,0 +1,469 @@
+/* Local Filter — shared UI for popup and options.
+   In the spirit of patrickcollison.com: plain white, serif ink,
+   hairlines, no chrome. The page should read like a document. */
+
+:root {
+  --ink: #111;
+  --paper: #fff;
+  --line: #ddd;
+  --muted: #595959; /* ~7:1 on white — small letterspaced text stays legible */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  background: var(--paper);
+  color: var(--ink);
+  margin: 0;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+main {
+  animation: rise 0.35s ease both;
+}
+
+/* Masthead — the redaction mark beside the title, over a Scotch rule. */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: normal;
+  font-style: italic;
+  margin: 0;
+}
+
+.rule {
+  height: 2px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  margin: 12px 0 4px;
+}
+
+.subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 6px 0 20px;
+  font-style: italic;
+}
+
+/* Section labels run a hairline out to the right edge. */
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.field-label::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+/* Choice rows — text links, not buttons. Selected is underlined. */
+
+.choices {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.choices label {
+  cursor: default;
+}
+
+.choices input {
+  position: absolute;
+  opacity: 0;
+}
+
+.choices span {
+  color: var(--muted);
+  font-size: 14px;
+  transition: color 0.2s ease;
+}
+
+.choices label:hover span {
+  color: var(--ink);
+}
+
+.choices input:checked + span {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.choices input:focus-visible + span {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Slider — a hairline with a dot. */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The slider and its direction hints share one column, so the marks
+   span exactly the track's width; the current value sits outside. */
+.slider-stack {
+  flex: 1;
+}
+
+.slider-stack input {
+  width: 100%;
+}
+.slider-row input {
+  flex: 1;
+}
+
+.slider-value {
+  font-size: 12.5px;
+  color: var(--muted);
+  width: 76px;
+  text-align: right;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  margin: 0;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--line);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ink);
+  margin-top: -5px;
+  transition: transform 0.15s ease;
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+/* Direction hints under sliders. */
+.slider-marks {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* Keyboard focus — visible on every control. */
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Editable list entries hint at it. */
+.topic .value {
+  cursor: text;
+  border-bottom: 1px dotted transparent;
+}
+
+.topic .value:hover {
+  border-bottom-color: var(--muted);
+}
+
+/* About link, right-aligned in the masthead. */
+.about-link {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.about-link:hover {
+  color: var(--ink);
+}
+
+/* Buttons and inputs */
+
+button {
+  font: inherit;
+}
+
+button.primary {
+  width: 100%;
+  padding: 8px 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+button.primary:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+button.ghost {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+button.ghost:hover {
+  color: var(--ink);
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 7px 2px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+/* Popup layout */
+
+body.popup {
+  /* Chrome popups are fixed-size (no resize affordance exists) — 320px
+     gives the choices row, slider and stats room to breathe. */
+  width: 320px;
+  padding: 20px 20px 16px;
+}
+
+body.popup section {
+  margin-bottom: 16px;
+}
+
+body.popup footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+body.popup footer a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+body.popup footer a:hover {
+  color: var(--ink);
+}
+
+kbd {
+  font-family: inherit;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+
+/* Options page footer */
+
+body.settings footer {
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+body.settings footer a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+body.settings footer a:hover {
+  color: var(--ink);
+}
+
+/* Options layout */
+
+body.settings {
+  max-width: 40em;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+}
+
+body.settings section {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+
+body.settings section:first-of-type {
+  border-top: none;
+}
+
+.topic {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  font-size: 14.5px;
+}
+
+.topic button {
+  opacity: 1;
+}
+
+.add-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-top: 10px;
+}
+
+.add-row input {
+  flex: 1;
+}
+
+/* The hidden attribute must beat any display rule. */
+[hidden] {
+  display: none !important;
+}
+
+.key-saved {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.prose {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.stat-name {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-bar-wrap {
+  flex: 1;
+}
+
+.stat-bar {
+  height: 3px;
+  background: var(--ink);
+}
+
+.stat-count {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 2em;
+  text-align: right;
+}
+
+.hint {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+.status {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 6px;
+  transition: color 0.2s ease;
+}
+
+.status.ok {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
